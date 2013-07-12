@@ -1,0 +1,226 @@
+.cat_slug_ids_div {
+  width: 200px;
+  text-align: center;
+  position: relative;
+}
+
+.cat_slug_ids_div input {
+  width: 100%;
+}
+
+.c_button_link {
+  -moz-box-shadow:inset 0px 1px 0px 0px #ffffff;
+  -webkit-box-shadow:inset 0px 1px 0px 0px #ffffff;
+  box-shadow:inset 0px 1px 0px 0px #ffffff;
+  background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #ededed), color-stop(1, #dfdfdf) );
+  background:-moz-linear-gradient( center top, #ededed 5%, #dfdfdf 100% );
+  filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#ededed', endColorstr='#dfdfdf');
+  background-color:#ededed;
+  -moz-border-radius:6px;
+  -webkit-border-radius:6px;
+  border-radius:6px;
+  border:1px solid #dcdcdc;
+  display:inline-block;
+  color:#777777;
+  font-family:arial;
+  font-size:15px;
+  font-weight:bold;
+  padding:6px 24px;
+  text-decoration:none;
+  text-shadow:1px 1px 0px #ffffff;
+}
+
+.c_button_link:hover {
+  background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #dfdfdf), color-stop(1, #ededed) );
+  background:-moz-linear-gradient( center top, #dfdfdf 5%, #ededed 100% );
+  filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#dfdfdf', endColorstr='#ededed');
+  background-color:#dfdfdf;
+  cursor: pointer;
+}
+
+.c_button_link:active {
+  position:relative;
+  top:1px;
+}
+
+#change_mn_div {
+  width: 300px;
+  float: left;
+}
+
+.custom_ref_td {
+  width: 200px;
+}
+
+.mn_numbers_div, .other_url_div, .other_delete_div, .homepage_div {
+  text-align: right;
+  margin-bottom: 10px;
+}
+
+.mn_numbers_div input, .homepage_div input {
+  width: 40px;
+}
+
+.info_box{
+  float: left;
+  padding: 20px;
+  width: 250px;
+  text-align: left;
+}
+
+#instruction_box {
+  width: 1000px;
+  margin: 0 auto;
+}
+
+#instruction_box .clear {
+  clear: both;
+  margin-bottom: -20px;
+}
+
+.letter_label {
+  position: absolute !important;
+  top:0;
+  left: -5px;
+  font-weight: bold;
+  font-size: 10px;
+  font-family: serif;
+  color: #888;
+}
+
+.link_scanner_div {
+  text-align: center;
+  position: relative;
+}
+
+.link_scanner_div .letter_label {
+  left:10px;
+}
+
+.link_scanner_div input {
+  width: 100%;
+}
+
+.linkscanner_td {
+  width: 460px !important;
+}
+
+.linkscanner_td .letter_label {
+  left: -8px !important;
+}
+
+.linkscanner_td textarea {
+  width: 100%;
+  height: 100px;
+}
+
+.manual_url_targets_div {
+  margin: 10px auto 0 auto;
+  text-align: center;
+  position: relative;
+}
+
+  .manual_url_targets_div textarea{
+width: 100%;
+height: 60px;
+  }
+
+.other_controls_td {
+  width: 140px;
+}
+
+.random_referrers_div {
+  width: 150px;
+  margin: 10px auto 0 auto;
+  position: relative;
+}
+
+.random_referrers_div label {
+  display: block;
+}
+
+.random_referrers_div .letter_label {
+  left:-20px;
+}
+
+.redirection_td {
+  width: 200px;
+}
+
+#reset_database_div {
+  margin-top: 70px;
+}
+
+#save_reset_div {
+  width: 300px;
+  float: right;
+  text-align: right;
+}
+
+#thecenter { 
+  width: 1000px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.the_table td, .the_table div{
+  position: relative;
+  overflow: visible;
+}
+
+#whitelis_div {
+  width: 300px;
+  margin-right: 100px;
+  float: left;
+}
+
+#whitelis_div textarea {
+  width: 100%;
+  height: 100px;
+}
+
+/* table td's s/
+
+.dividing_or_div{
+width: 20px;
+font-size: 16px;
+  }
+
+  /s display classes for options and output s/
+  
+
+.dividing_or_div strong{
+display: block;
+margin-top: 60px;
+  }
+  
+
+  
+  .homepage_div{
+  } 
+  
+
+  
+  /s area under options s/
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+  #thecenter .clear{
+clear: both;
+  }
+  
+  /s custom button link styling s/
+  
+
+  
+  /s instructions and letter labels s/
+
+*/
