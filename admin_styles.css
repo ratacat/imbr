@@ -52,7 +52,7 @@
   width: 200px;
 }
 
-.mn_numbers_div, .other_url_div, .other_delete_div, .homepage_div {
+.mn_numbers_div, .other_url_div, .other_delete_div, .homepage_div, .other_save_div {
   text-align: right;
   margin-bottom: 10px;
 }

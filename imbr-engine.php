@@ -4,7 +4,7 @@ require("admin_row.php");
 
 class imbanditRedirector {
 
-  public $imbV = 'v297.2';
+  public $imbV = 'v297.4';
 
   private $tableLinkscanners;
   private $tablePosts;
@@ -19,9 +19,18 @@ class imbanditRedirector {
   // This is fundamentally how control is passed to the plugin code.
   public function __construct($wpdb) {
     $this->wpdb = $wpdb;
+
+    // Why this style?
     add_action('publish_post', array(&$this, 'ls_singlepost_scan'));
+    //add_action('publish_post', 'ls_singlepost_scan');
+    //add_action('new_to_publish', 'ls_singlepost_scan');
+    //add_action('draft_to_publish', 'ls_singlepost_scan');
+
     add_action('admin_menu', array(&$this, 'prc_add_options_to_admin'));
-    add_action('wp_head', array(&$this, 'wp_add_red'));
+
+    // What on Earth does this do?
+    //add_action('wp_head', array(&$this, 'wp_add_red'));
+
     add_action('get_header', array(&$this, 'wp_imb_red_head'));
     add_action('init', array(&$this, 'enqueueBackendFiles'));
 
@@ -69,11 +78,15 @@ class imbanditRedirector {
   // 2. Created a new redirector
   // 3. Modified the whitelist
   // 4. Modified the mn parameters
-  private function red_editor_save() {
+  //private function red_editor_save() {}
+
+  // This method will save the contents of a particular IMBR admin screen row, such as a modified redirector
+  // or a new one.  It will _not_ deal with the whitelist or mn parameters.
+  private function redirector_save() {
 
     // 1. First delete everything from imb_linkscanner because we're 
     //    going to rebuild it from scratch.
-    $this->wpdb->query("delete from ".$this->tableLinkscanners);
+    //$this->wpdb->query("delete from ".$this->tableLinkscanners);
 
     // 2. Deal with the existing redirectors.
 
@@ -84,49 +97,51 @@ class imbanditRedirector {
     // The following sections will leap to life and update the imb_linkscanner table given some combination of these fields
 
     // The number of existing redirectors
-    $redirectorCnt = $_POST['redirectorCnt'];
+    //$redirectorCnt = $_POST['redirectorCnt'];
 
     // 2.1 Iterate over every existing redirector
-    for ($i = 1; $i <= $redirectorCnt; $i++) {
+    //for ($i = 1; $i <= $redirectorCnt; $i++) {
 
       // 2.1.1 Determine the indexed POST parameter names
-    	$url = "post_aff_url_" . $i;              // aka manual url targets
-      $rpost = "random_post_" . $i;
-      $rpage = "random_page_" . $i;
-      $spc = "single_pages_categories_" . $i;   // aka "category slubs + postIDs"
-      $mn = "mn_" . $i;
-      $id = "id_" . $i;
-      $rand = "rand_" . $i;
+      //$url = "post_aff_url_" . $i;              // aka manual url targets
+      //$rpost = "random_post_" . $i;
+      //$rpage = "random_page_" . $i;
+      //$spc = "single_pages_categories_" . $i;   // aka "category slubs + postIDs"
+      //$mn = "mn_" . $i;
+      //$id = "id_" . $i;
+      //$rand = "rand_" . $i;
       //$select = "select_" . $i;
-      $ls_regex_new = "ls_regex_new_" . $i;     // aka linkscanner urls
+      //$ls_regex_new = "ls_regex_new_" . $i;     // aka linkscanner urls
 
       // 2.1.2 Update linkscanner set to within a selection of categories
       // Only trigger if category slugs + post ids has a value, and the other two fields do not.
-      if ( $_POST[$ls_regex_new] == '' && $_POST[$spc] != '' && $_POST[$url] == '') {
-        $spcs = explode(',', $_POST[$spc]);
-        foreach ($spcs as $spcItem) {
-          $this->ls_scan_all($_POST[$mn], NULL, NULL,$spcItem);
-        }
-      }
+      //if ( $_POST[$ls_regex_new] == '' && $_POST[$spc] != '' && $_POST[$url] == '') {
+        //$spcs = explode(',', $_POST[$spc]);
+        //foreach ($spcs as $spcItem) {
+          // only send $postid _or_ $spc, never both
+          //$this->linkscan($_POST[$mn], NULL, NULL,$spcItem);
+        //}
+      //}
 
       // 2.1.3 --------New LS Regexs----------------------------------------------------
       //$regexTable = $this->wpdb->prefix . 'imb_regex';
       // ls_regex_new aka linkscanner urls
       // Only trigger if linkscanner URLs has a value, regardless of the values of the other two fields
-      $regexArray = explode("\n", $_POST[$ls_regex_new]);
-      foreach ($regexArray as $newRegex) {
-        $newRegex = trim($newRegex);
-        if ($newRegex == NULL)
-          continue;
+      //$regexArray = explode("\n", $_POST[$ls_regex_new]);
+      //foreach ($regexArray as $newRegex) {
+        //$newRegex = trim($newRegex);
+        //if ($newRegex == NULL)
+          //continue;
 
         //$encoded = base64_encode($newRegex);
         //$sql = "INSERT INTO " . $regexTable . " (regex, mn) VALUES ('$encoded','$_POST[$mn]') on DUPLICATE KEY UPDATE regex='$encoded'";
         //$this->wpdb->query($sql);
-        $spcs = explode(',', $_POST[$spc]);
-        foreach ($spcs as $spcItem) {
-          $this->ls_scan_all($_POST[$mn], $newRegex, NULL,$spcItem);
-        }
-      }
+        //$spcs = explode(',', $_POST[$spc]);
+        //foreach ($spcs as $spcItem) {
+          // only send $postid _or_ $spc, never both
+          //$this->linkscan($_POST[$mn], $newRegex, NULL,$spcItem);
+        //}
+      //}
 
       // 2.1.4 Now update the redirector record with whatever POST parameters have been sent.
 
@@ -143,26 +158,31 @@ class imbanditRedirector {
       //}
 
       //$query = "update $this->tableRedirectors set url = '" . $_POST[$url] . "', random_post = '" . $rpost2 . "', random_page = '" . $rpage2 . "', single_pages_categories = '" . $_POST[$spc] . "', mn = '" . $_POST[$mn] . "', rand = '" . $_POST[$rand] . "' where id = '" . $_POST[$id] . "'";
-      $query = "update $this->tableRedirectors set url = '" . $_POST[$url]
+      //$query = "update $this->tableRedirectors set url = '" . $_POST[$url]
         //. "', random_post = '" . $rpost2 
         //. "', random_page = '" . $rpage2 
-        . "', single_pages_categories = '" . $_POST[$spc]
-        . "', mn = '" . $_POST[$mn] 
+        //. "', single_pages_categories = '" . $_POST[$spc]
+        //. "', mn = '" . $_POST[$mn] 
         //. "', rand = '" . $_POST[$rand] 
-        . "' where id = '" . $_POST[$id] . "'";
-      $this->wpdb->query($query);
+        //. "' where id = '" . $_POST[$id] . "'";
+      //$this->wpdb->query($query);
       //}
-    } // iterate over the existing redirectors
+    //} // iterate over the existing redirectors
 
     
     // 3. Now detect if a new redirector should be created.
     //    post_aff_url aka manual url targets.
-    if (isset($_POST['post_aff_url'])) {
+    //if (isset($_POST['post_aff_url'])) {
+    if (isset($_POST['save_redirector'])) {
 
       // Assuming so, clean up the other parameters
+
       // single_pages_categories aka "category slubs + postIDs"
       if (!isset($_POST['single_pages_categories']))
         $_POST['single_pages_categories'] = NULL;
+
+      if (!isset($_POST['post_aff_url']))
+        $_POST['post_aff_url'] = NULL;
 
       if (isset($_POST['random_post']))
         $rand_post = 1;
@@ -175,7 +195,7 @@ class imbanditRedirector {
         $rand_page = 0;
 
       // Only need $mn, not $mn_upd
-      $mn = $_POST['mn_upd'];
+      $mn = $_POST['newRedirectorMN'];
 
       // If _any one_ of the following 5 variables are supplied then
       // write the new record to the redirector_table.
@@ -188,22 +208,32 @@ class imbanditRedirector {
 
         // post_aff_url aka manual url targets
         // single_pages_categories aka "category slubs + postIDs"
-        $query = "INSERT INTO $this->tableRedirectors set url = '"  . $_POST['post_aff_url'] 
-          . "', single_pages_categories = '" . $_POST['single_pages_categories'] 
-          . "', mn ='" . $mn
-          . "', random_post = '" . $rand_post 
-          . "', random_page = '" . $rand_page . "' ";
+        //$query = "INSERT INTO $this->tableRedirectors set " .
+          //"url = '" . $_POST['post_aff_url'] . " " .
+          //. "', single_pages_categories = '" . $_POST['single_pages_categories'] 
+          //. "', mn ='" . $mn
+          //. "', random_post = '" . $rand_post 
+          //. "', random_page = '" . $rand_page . "' ";
+
+        $query = "insert into $this->tableRedirectors set " .
+          "random_post = -1, " .    // presently unused
+          "random_page = -1, " .    // presently unused
+          "url = 'N/A', " .           // presently unused
+          "single_pages_categories = '" . $_POST['single_pages_categories'] . "', ". // this may be a comma delimited list
+          "mn = '$mn', " . 
+          "rand = -1, " .           // presently unused
+          "post_identifier = 'N/A'"; // presently unused
         $this->wpdb->query($query);
       }
 
       // This is the mn for the new redirector.  Why a 2nd variable name?  Reuse $mn instead.
-      $mn4LS = $_POST['mn_upd'];
+      //$mn4LS = $_POST['newRedirectorMN'];
 
       // post_aff_url aka manual url targets
       // single_pages_categories aka "category slubs + postIDs"
       //$_POST['post_aff_url'] = false;
       //$_POST['single_pages_categories'] = false;
-      //$_POST['mn_upd'] = false;
+      //$_POST['newRedirectorMN'] = false;
       //exit(var_dump($this->wpdb->last_query));
     } //isset($_POST['post_aff_url']) // post_aff_url aka manual url targets
 
@@ -221,7 +251,8 @@ class imbanditRedirector {
       $i = 5/0;
       //$spcs = explode(',', $spc4OldRegex);
       //foreach ($spcs as $spcItem) {
-      //$this->ls_scan_all($mn4LS, NULL, NULL,$spcItem);
+        // only send $postid _or_ $spc, never both
+        //$this->linkscan($mn4LS, NULL, NULL,$spcItem);
       //}
     }
 
@@ -239,48 +270,55 @@ class imbanditRedirector {
         if ($newRegex == NULL)
           continue;
 
+        // don't need to do this
         // base64_encoded version of the newRegex
         //$encoded = base64_encode($newRegex);
-        $newRegexB64 = base64_encode($newRegex);
+        //$newRegexB64 = base64_encode($newRegex);
 
         // $mn is already set with the value we want.  No need for a 2nd variable name.
         //$mn = $mn4LS;
 
-        $sql = "INSERT INTO " . $this->tableRegexes . " (regex, mn) VALUES ('$newRegexB64','$mn') on DUPLICATE KEY UPDATE regex='$newRegexB64'";
+        //$sql = "INSERT INTO " . $this->tableRegexes . " (regex, mn) VALUES ('$newRegex','$mn') on DUPLICATE KEY UPDATE regex='$newRegex'";
+        $sql = "INSERT INTO $this->tableRegexes (regex, mn) VALUES ('$newRegex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
         $this->wpdb->query($sql);
 
-        $spcs = explode(',', $spc4OldRegex);
-        foreach ($spcs as $spcItem) {
-          $this->ls_scan_all($mn, $newRegex, NULL,$spcItem);
-        }
+        // Temporarily remove the looping
+        $spcItem = $spc4OldRegex;
+        //$spcs = explode(',', $spc4OldRegex);
+        //foreach ($spcs as $spcItem) {
+          // only send $postid _or_ $spc, never both
+          if (is_numeric($spcItem))
+            $this->linkscan($mn, $newRegex, $spcItem); // this is a postid
+          else {
+            $this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
+          }
+        //}
       }
     }
 
     // 4. -----------------------insert white list ---------------------------
-    // This is not relevant to any particular row.  But perhaps it's out of place here?
+    // This is not relevant to any particular row and it's out of place here.
     // whitelist may be 'set' but '' also.  If that's the case then no changes to the db occur.
     // warning: this code does not check for set whitelist.  Should it ?
     // This is not part of adding a new redirector record, the whitelist applies globally 
     //$whiteListTable = $this->wpdb->prefix . 'imb_whiteList';
-    $refererRegexArray = explode("\n", $_POST['whiteList']);
-    $delWLSql = "delete from $this->tableWhitelists";
-    $this->wpdb->query($delWLSql);
-    foreach ($refererRegexArray as $refererRegex) {
-      $refererRegex = trim($refererRegex);
-      if ($refererRegex == NULL)
-        continue;
-      $i = 5/0;
+    //$refererRegexArray = explode("\n", $_POST['whiteList']);
+    //$delWLSql = "delete from $this->tableWhitelists";
+    //$this->wpdb->query($delWLSql);
+    //foreach ($refererRegexArray as $refererRegex) {
+      //$refererRegex = trim($refererRegex);
+      //if ($refererRegex == NULL)
+        //continue;
+      //$i = 5/0;
       //$sql = "INSERT INTO " . $whiteListTable . " (refererRegex,status) VALUES ('$refererRegex',0) on DUPLICATE KEY UPDATE refererRegex='$refererRegex'";
       //$this->wpdb->query($sql);
-    }
+    //}
 
     // 5. Change the mn name?
     //if($_POST['mnName'] != 'mn'){
     //$chageParaSql = "INSERT INTO " . $whiteListTable . " (refererRegex,status) VALUES ('".$_POST['mnName']."',-1)";
     //}
     //$this->wpdb->query($chageParaSql);
-
-
 
   }
 
@@ -300,7 +338,11 @@ class imbanditRedirector {
     //$jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
     //update_option('jsim_url_regex', $jsim_url_regex);
 
-  	$this->resetLinkscanners();
+    // This is only useful for testing when we need to reset the 
+    // posts to a known state.
+    $this->eraseAllPosts();
+
+    $this->resetLinkscanners();
     $this->resetRedirectors();
     $this->resetRegexes();
     $this->resetWhitelists();
@@ -318,36 +360,41 @@ class imbanditRedirector {
   // proceeding onto the ordinary display of the now updated information.
   public function imb_red_editor() {
 
-    // In the event this function has been called via a POST request,
+    // 1. In the event this function has been called via a POST request,
     // look for certain commands as POST parameters and execute them first,
     // and then continue with the ordinary display of the admin screen.
     // The if-else structure ensures that only one option will 
     // run and only the first option that passes, even if
     //other options might also pass.
 
-    // Delete a specific redirector
-    if (isset($_POST['delete_redirector'])) {
-      //$query = "delete from $this->tableRedirectors where mn = '$_POST['delete_redirector']'";
-      $redirector = $_POST['delete_redirector'];
-      $query = "delete from $this->tableRedirectors where mn = '$redirector'";
-    	$this->wpdb->query($query);
-
-    } else if (isset($_POST['redirector_databaseclear'])) {
+    // 1.1 Reset the database?
+    if (isset($_POST['redirector_databaseclear'])) {
       $this->resetDatabase();
+
+    // 1.1 Delete a specific redirector
+    //if (isset($_POST['delete_redirector'])) {
+      //$query = "delete from $this->tableRedirectors where mn = '$_POST['delete_redirector']'";
+      //$redirector = $_POST['delete_redirector'];
+      //$query = "delete from $this->tableRedirectors where mn = '$redirector'";
+      //$this->wpdb->query($query);
 
     // This parameter value cannot be set and thus this branch of code
     // is never used.
     //} elseif (isset($_POST['linkscanner_databaseclear'])) {
     //  //$this->ls_init('delete');
 
-    } else if (isset($_POST['update'])) {
+    // 1.2 Save the contents of a redirector record
+    } else if (isset($_POST['save_redirector'])) {
+      $this->redirector_save();
+
+    //} else if (isset($_POST['save_redirector'])) {
       // If control makes it here then we surmise that the user has performed any combination of:
       // 1. Changed something about the existing redirector records
       // 2. Created a new redirector
       // 3. Modified the whitelist
       // 4. Modified the mn parameters
       // ... and is saving the changes.
-      $this->red_editor_save();
+      //$this->red_editor_save();
     }
 
     // 1. The entire IMBR admin page fits inside this div.
@@ -372,6 +419,7 @@ class imbanditRedirector {
     echo "</center>";
   }
 
+  // All of the IMBR admin screen is inside this 3rd layer wrapper.
   private function imb_red_editor_center_contents() {
 
     // single_pages_categories aka "category slubs + postIDs"
@@ -380,11 +428,6 @@ class imbanditRedirector {
     //if (isset($_POST['apiKeyRequest'])) {
     //$this->requestApiKey($_POST['paypalemail']);
     //}
-
-    // is this a method of tracing?
-    //echo $this->im_get_wp_root();
-    //$n = $this->im_get_wp_root();
-    //echo $n;
 
     // 1. Now display the IMBR logo and revision.
     echo "<img src=\"../wp-content/plugins/imbr/imbr.png\"><br>$this->imbV<br><br><br><br>";
@@ -419,9 +462,6 @@ class imbanditRedirector {
     //$post_aff_url = '';
     //}
 
-    // 3. Determine the table name for imb_redirector
-    //$table = $this->wpdb->prefix . 'imb_redirector';
-
     //$ls_table = $this->wpdb->prefix . "imb_linkscanner";
     //$co = explode('wp-admin', $_SERVER['REQUEST_URI']); //Gets last part of URL link
     //$co = substr($co[0], 0, -1); //Cleans up link so that it's at the last letter.
@@ -435,21 +475,6 @@ class imbanditRedirector {
     //}
 
     //$links = '';
-
-    // This is a method to store information about column headers so that
-    // they may be subsequently enumerated and emitted as html.  It looks
-    // like it might be some method of selecting which columns
-    // should display, at runtime.  This is not used.
-    //-------------------------Prepare Column Headers for Table-----------------------
-    //$posts_columns = array(
-    //'URL' => __('Affiliate URLs (One per line)'),
-    //'post URL' => __('Random Referrers OR Specific and Category Referrers'),
-    //    'Random MP' => __('Homepage %'),
-    //'MN' => __('MN'),
-    //'url' => __('url'),
-    //'DEL' => __('Delete')
-    //);
-    //$posts_columns = apply_filters('manage_posts_columns', $posts_columns);
 
     // 4. Emit the Instruction Box HTML
     echo "<div id=\"instruction_box\">";
@@ -470,392 +495,12 @@ class imbanditRedirector {
     echo "</div>"; // instruction_box
     echo "<br><br>";
 
-    // 5. The bulk of the admin section is displayed in a table.
-    //    Start this table now.
-    echo "<table class=\"widefat the_table\" style=\"width:1000px;\">";
+    // The major part of the admin screen is displayed in a table.  This is the list of existing
+    // redirectors as well as an additional row to contain inputs for a new redirector.
+    // Emit that table now.
+    $this->imb_red_editor_table_contents();
 
-    // This form will contain all the inputs for the table, as well
-    // as the submit button in thecenter div.  This distribution 
-    // is admittedly tedious, but it's what I have to work with now.
-    //echo "<form action=\"options-general.php?page=<qqqphp echo $_GET['page']; QQQ>\" method=\"post\">";
-    $page = $_GET['page'];
-    echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
-
-    // 6. Now output the column headers in the table header.  Just hardwire the headers, don't bother
-    //    enumerating over the elements of a data structure.  That's too comlicated!
-    //-------------------------Output Column Headers--------------------------------
-    echo "<thead>";
-    echo   "<tr>";
-    echo     "<th>Custom Referrers</th>";
-    echo     "<th>&nbsp;</th>";
-    echo     "<th>Redirection URLs</th>";
-    echo     "<th>Link Scanner Found Targets</th>";
-    echo     "<th>Other Controls</th>";
-
-    // This is the obsolete/never completed "iterate over the headers" method.
-    //foreach ($posts_columns as $column_display_name) {
-    //  echo '<th>';
-    //  echo $column_display_name . '</th>';
-    //} //$posts_columns as $column_display_name
-    echo   "</tr>";
-    echo "</thead>";
-
-    // 7. Now output the table body
-    //echo "<tbody>";  // id=\"the-list\"
-    //echo "<tbody>";  // id=\"the-list\"
-    $tbody = "<tbody>";
-
-    //$time_difference = get_settings('gmt_offset');
-    //$now = gmdate("Y-m-d H:i:s", time());
-
-    //$request = "SELECT ID, post_title, post_excerpt, post_type FROM " . $this->wpdb->posts . " WHERE post_status = 'publish' ";
-    //$posts = $this->wpdb->get_results($request);
-
-    //$request_post = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $table";
-    //$posts_post = $this->wpdb->get_results($request_post);
-    // single_pages_categories aka "category slubs + postIDs"
-     // url aka manual url targets
-    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $this->tableRedirectors";
-    $redirectors = $this->wpdb->get_results($redirectorsQuery);
-
-    //exit(var_dump($this->wpdb->last_query));
-    $i = 1; // index of populated rows
-    $mns = '';
-
-    // 7.1 ----------------Load Existing Redirectors---------------------------------------------
-    //if ($posts_post) {
-    if ($redirectors) { // Test for the existence of any redirectors.
-
-      // If there are redirectors, then iterate over them all
-      // and emit a table-row to display them.
-      //foreach ($posts_post as $post_post) {
-      foreach ($redirectors as $redirector) {
-
-        $adminRow = new AdminRow();
-        //echo "<tr>";
-
-        // Can this be a list?
-        //$aff_url = $post_post->url;
-        $aff_url = $redirector->url;
-
-        //$single_pages_categories = $post_post->single_pages_categories;
-        // single_pages_categories aka "category slubs + postIDs"
-        $single_pages_categories = $redirector->single_pages_categories;
-
-        //$mns[$i] = $post_post->mn;
-        $mns[$i] = $redirector->mn;
-
-        $rpost = "";
-        //if ($post_post->random_post == 1) {
-        if ($redirector->random_post == 1)
-          $rpost = 'checked="1"';
-
-        $rpage = "";
-        if ($redirector->random_page == 1)
-          $rpage = 'checked="1"';
-
-        //iterates through existing segments re-assigns MN if it already exists
-        //for ($j = 0; $j < $i; $j++) {
-        //if ($post_post->mn == $mns[$j] || $post_post->mn <= 9 || $post_post->mn >= 1000) {
-        //$mns[$i] = rand(10, 999);
-        //}
-        //}
-
-        // Plucked from redirector table field.
-        // single_pages_categories aka "category slubs + postIDs"
-        $adminRow->cat_slug_ids_div = "<input value=\"$single_pages_categories\" id=\"single_pages_categories_$i\" name=\"single_pages_categories_$i\" onkeyup=\"disableCheckboxes(this.value , $i);\">";
-        //echo "</div>"; // cat_slug_ids_div
-
-        //echo "<div>"; // div ???
-        //echo "<div>"; // class="random_referrers_div"
-        // echo "<div>(C)</div>" // class="letter_label" 
-        //  . "<strong>Random Referrers</strong>";
-
-        // Plucked from redirector table field.
-        // single_pages_categories aka "category slubs + postIDs"
-        // what is the relevance of that here?
-        $adminRow->random_referrers_div ="<label for=\"random_post_$i\">"
-          //<input id="random_post_<qqqphp echo $i; QQQ>" name="random_post_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpost;QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ> onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
-          . "<input id=\"random_post_$i\" name=\"random_post_$i\" type=\"checkbox\" $rpost >"
-          . "Random Posts"
-          . "</label>"
-
-          . "<label for=\"random_page_$i\">"
-          //<input id="random_page_<qqqphp echo $i; QQQ>" name="random_page_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpage; QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ>onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
-          . "<input id=\"random_page_$i\" name=\"random_page_$i\" type=\"checkbox\" $rpage >"
-          . "Random Pages"
-          . "</label>";
-        //echo "</div>"; // random_referrers_div
-        //echo "</div>"; // div ???
-
-        //echo "</td>"; // custom_ref_td
-
-        //echo "<td>"; // 2. class="redirection_td"
-        //$adminRow->redirection_td = "<div class=\"link_scanner_div\">"
-        //  . "<div class=\"letter_label\">(A)</div>"
-        //  . "<strong>Linkscanner URLs</strong>"
-        //  . "<br>"
-        //  . "<small>/Regex/ Scans for existing links</small>"
-        //  . "<br>"
-
-        // Deal with regexTable
-        $regexTable = $this->wpdb->prefix . 'imb_regex';
-        //add where mn
-        $sql = "SELECT * FROM " . $regexTable
-          . " where mn=" . $mns[$i];
-          //" ORDER BY id ";
-        $regexes = $this->wpdb->get_results($sql, ARRAY_A);
-        $countLink = 0;
-        $showAllLinkText = '';
-
-          // Substantial duplication within these two branches...
-          // The duplicated code computes $linkText and $countLink 
-          // for subsequent use.  It's somewhat out of place here.
-          if (count($regexes) == 0) {
-
-            // DUP1 - Find all records in linkscanner table where the spc is
-            // included in the redirector table, the mn is the same, and regex = ''
-            //$lsTable = $this->wpdb->prefix . 'imb_linkscanner';
-            // single_pages_categories aka "category slubs + postIDs"
-          	//$spcStr = str_replace(",","','",$single_pages_categories);
-            //$sql = "SELECT * FROM " . $lsTable 
-            //  . " WHERE mn = '" . $mns[$i] 
-            //  . "' and single_pages_categories in ('".$spcStr."') and regex='' ORDER BY RAND()  ";
-            //$links = $this->wpdb->get_results($sql, ARRAY_A);
-            // /DUP1
-
-            // DUP2 - Examine all links found and build a concatenated
-            //        string of them, suitably truncated to fit.  Also
-            //        count them.
-            //foreach ($links as $link) {
-            //$linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
-
-            //echo '<a href="' . $link['link'] . '" target="_new">' . $linkText . '</a>  ';
-            //$adminRow->link_scanner_div = "<a href=" . $link['link'] . " target=\"_new\">$linkText</a>";
-            //$showAllLinkText .= $linkText.'&#13;';
-            //$countLink++;
-            //}
-            // /DUP2
-            // ls_regex_new aka linkscanner urls
-            //echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '"  type="text" ></input>';
-          } else {
-            foreach ($regexes as $regexItem) {
-
-              // DUP1 - Find all records in linkscanner table where the spc is
-              // included in the redirector table, the mn is the same, and regex is
-              // the same.
-              $lsTable = $this->wpdb->prefix . 'imb_linkscanner';
-              // single_pages_categories aka "category slubs + postIDs"
-              $spcStr = str_replace(",","','",$single_pages_categories);
-
-              //link scanner sql
-              $regexItemB64 = base64_decode($regexItem['regex']);
-              $sql = "SELECT * FROM " . $lsTable 
-                . " WHERE mn = '" . $regexItem['mn'] 
-                . "' and single_pages_categories in ('".$spcStr."') and "
-                . "regex='".$regexItemB64."' ORDER BY RAND()  ";
-              $links = $this->wpdb->get_results($sql, ARRAY_A);
-              // /DUP1
-
-              if ($regexItemB64) {
-                // ls_regex_new aka linkscanner urls
-                //echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '" value="' . base64_decode($regexItem['regex']) . '" type="text"></input>';
-                $adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_\$i\" value=\"$regexItemB64\" type=\"text\"></input>";
-              } else {
-                // ls_regex_new aka linkscanner urls
-              	//echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '"  type="text" ></input>';
-                $adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_\$i\"  type=\"text\" ></input>";
-              }
-
-              // unused
-              //echo '<table><tr><td>' . base64_decode($regexItem['regex']) . '</td><td><input type="button" onClick="alert_url(\'http:\/\/' . $_SERVER['HTTP_HOST'] . $co . '/?mn=' . $regexItem['mn'] . '\')" value="url"/></td><td> <input type="button" id="deletebutton1" name="deletebutton1" onclick="a=confirm(\'Are you sure?\');if(a == true) top.location=\'options-general.php?action=deleteRegex&regexid=' . $regexItem['id'] . '&page=' . $_GET['page'] . '\';" value="delete"></td></tr></table>';
-              //echo "Posts Found:" . count($links);
-
-              // DUP2
-              foreach ($links as $link) {
-                $linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
-                //echo '<a href="' . $link['link'] . '" target="_new">' . $linkText . '</a>  ';
-                $showAllLinkText .= $linkText.'&#13;';
-                $countLink++;
-              }
-              // /DUP2
-
-              // unused
-              //if (isset($this->postsFound[$link['mn']]))
-              //echo '<br/>';
-              //if (isset($this->postsFound[$link['mn']]))
-              //echo ' Posts Found: ' . $this->postsFound[$link['mn']];
-              //if (isset($linksFound[$link['mn']]))
-              //echo ' Links Found: ' . $this->linksFound[$link['mn']];
-
-            } // for each regex item
-          } // count($regexes) == 0
-          // end regexTable stuff
-
-          //</div> <!-- link_scanner_div -->
-          //<div class="manual_url_targets_div">
-          //<div class="letter_label">(BC)</div>
-          //<strong>Manual URL Targets</strong>
-
-          // Plucked from a redirector table field.  Can this be a list?
-          //<textarea name="post_aff_url_<qqqphp echo $i; QQQ>" type="text-area" id="post_aff_url<qqqphp echo $i; QQQ>" ><qqqphp echo $aff_url; QQQ></textarea>
-          $adminRow->manual_url_targets_div = "<textarea name=\"post_aff_url_$i\" type=\"text-area\" id=\"post_aff_url$i\" >$aff_url</textarea>";
-          //</div> <!-- manual_url_targets_div -->
-
-          //$co = explode('wp-admin', $_SERVER['REQUEST_URI']);
-          //$co = substr($co[0], 0, -1); //jared modified negative offset to -1, it used to be -2
-          //echo '<div><input name="" type="text" id="" value=""/>';
-          //echo "</td>"; // redirection_td
-
-          //echo "<td>"; // 3. class="linkscanner_td"
-          //echo "<div>(A)</div>" //  class="letter_label"
-          // Computed earlier
-          $adminRow->linkscanner_td = "<textarea>$showAllLinkText</textarea>"
-            . $countLink . " Posts";
-          //echo "</td>"; // linkscanner_td
-
-          //$r = "";
-          //$r .= "<td>"; // 4. class="other_controls_td"
-
-          // echo "<div>" // class="homepage_div"
-          $n = $redirector->rand;
-          $adminRow->homepage_div = "<label>"
-            . "Homepage %"
-            //<input name="rand_<qqqphp echo $i; QQQ>" type="text" id="rand_<qqqphp echo $i; QQQ>" value="<qqqphp echo $post_post->rand; QQQ>" size="3"/>
-            . "<input name=\"rand_$i\" type=\"text\" id=\"rand_$i\" value=\"$n\"  size=\"3\"/>"
-            . "</label>";
-          //. "</div>";  // homepage_div
-
-          //<div class="mn_numbers_div">
-          $adminRow->mn_numbers_div = "<label>"
-            . "ID"
-            //<input name="mn_<qqqphp echo $i; QQQ>" type="text" id="mn_<qqqphp echo $i; QQQ>" value="<qqqphp echo $mns[$i]; QQQ>" size="3"/>
-            . "<input name=\"mn_$i\" type=\"text\" id=\"mn_$i\" value=\"$mns[$i]\" size=\"3\"/>"
-            . "</label>"
-            . "<input name=\"id_$i\" type=\"hidden\" id=\"id_$i\" value=\"$redirector->id\"/>";
-
-          //<qqqphp
-          //$wltable = $this->wpdb->prefix . 'imb_whiteList';
-          //$mnNameQuery = "select * from $wltable where status=-1";
-          //$mnNames = $this->wpdb->get_results($mnNameQuery);
-          //if ($mnNames) {
-          //foreach ($mnNames as $mnNameDB) {
-          //$mnName =  $mnNameDB->refererRegex;
-          //}
-          //}
-          //if( $mnName == '' || $mnName == null){
-          //$mnName = 'mn';
-          //}
-          //<div class="other_url_div">
-          //<input class="c_button_link" type="button" onClick="alert_url('http:\/\/<qqqphp echo $_SERVER['HTTP_HOST'] . $co . '/?'.$mnName.'=' . $mns[$i]; QQQ>')" value="url" />
-
-          $http_host = $_SERVER['HTTP_HOST'];
-          // todo fix $mnName and $co
-          $adminRow->other_url_div = "<input class=\"c_button_link\" type=\"button\" onclick=\"alert_url('http:\/\/$http_host/?mn=$mns[$i]')\" value=\"url\" />";
-          //</div> <!-- other_url_div -->
-
-          //<div class="other_delete_div">
-          //<button class="c_button_link" onclick="if(!confirm('Delete This Entry?')){ return false; };" name="select_<qqqphp echo $i; QQQ>" id="select_<qqqphp echo $i; QQQ>" value="delete">delete</button>
-          //$adminRow->other_delete_div = "<button class=\"c_button_link\" onclick=\"if(!confirm('Delete This Entry?')){ return false; };\" name=\"select_$i\" id=\"select_$i\" value=\"delete\">delete</button>";
-          $adminRow->other_delete_div = "<button "
-            . "class=\"c_button_link\" "
-            . "onclick=\"if(!confirm('Delete This Entry?')){ return false; };\" "
-            . "name=\"delete_redirector\" "
-            //. "id=\"select_$i\" "
-            . "value=\"$mns[$i]\">delete</button>";
-          //</div> <!-- other_delete_div -->
-
-          //$r .= "</td>"; // other_controls_td
-          //echo $adminRow->getHTML();
-          $tbody .= $adminRow->getHTML();
-          //	echo $n;
-          //echo "</tr>";
-          $i++;
-          //unset($rpost);
-          //unset($rpage);
-
-      //} //$posts_post as $post_post
-      } // $redirectors as $redirector
-
-    //} //$posts_post
-    } // $redirectors
-
-    // 7.2 -------------------------Create New Redirector---------------------------------------------
-    //$last = '';
-    $mnss = rand(10, 999); // new redirector mn number
-
-    $adminRow = new AdminRow();
-    $adminRow->populated = false; // This is the unpopulated data-entry row
-
-    //echo "<tr>";
-    //echo "<td>"; // 1. class="custom_ref_td"
-    //echo "<div>"; // class="cat_slug_ids_div"
-    //echo "<div>(AB)</div>"; // class="letter_label"
-    //"<strong>Category Slugs + PostIDs</strong>"
-    //. "<br />"
-    //. "<small>Comma delimited, mix and match</small>";
-    $adminRow->cat_slug_ids_div = "<input name=\"single_pages_categories\" id=\"single_pages_categories\" type=\"text\" onkeyup=\"disableCheckboxesNew(this.value)\">";
-    //echo "</div>"; // cat_slug_ids_div
-
-    //echo "<div>";
-    //echo "<div>"; // class="random_referrers_div"
-    //echo "<div>(C)</div>" // class="letter_label"
-    //. "<strong>Random Referrers</strong>";
-    $adminRow->random_referrers_div = "<label for=\"random_post\">"
-      . "<input name=\"random_post\" id=\"random_post\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
-      . "Random Posts"
-      . "</label>"
-      . "<label for=\"random_page\">"
-      . "<input id=\"random_page\" name=\"random_page\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
-      . "Random Pages"
-      . "</label>";
-    //echo "</div>"; // random_referrers_div
-    //echo "</div>"; // div ???
-    //echo "</td>"; // custom_ref_td
-    //echo "<td>"; // 2. class="redirection_td"
-
-    // why is this here?
-    //<input type="hidden" name="update" value="yes" />
-    //<div class="link_scanner_div">
-    //<div class="letter_label">(A)</div>
-    //<strong>Linkscanner URLs</strong><br />
-    //<small>/Regex/ Scans for existing links</small><br />
-    // ls_regex_new aka linkscanner urls
-    $adminRow->link_scanner_div = "<input type=\"text\" id=\"ls_regex_new\" name=\"ls_regex_new\">";
-    //</div> <!-- link_scanner_div -->
-
-    //<div class="manual_url_targets_div">
-    //<div class="letter_label">(BC)</div>
-    //<strong>Manual URL Targets</strong>
-    $adminRow->manual_url_targets_div = "<textarea name=\"post_aff_url\" type=\"text\" id=\"post_aff_url\"></textarea>";
-    //</div> <!-- manual_url_targets_div -->
-    //echo "</td>"; // redirection_td
-
-    //echo "<td>"; // 3.
-    //<input name="mn_upd" type="hidden" id="mn_upd" value="<qqqphp echo $mnss; QQQ>" size="10" readonly="readonly"/>
-    $adminRow->linkscanner_td = "<input name=\"mn_upd\" type=\"hidden\" id=\"mn_upd\" value=\"$mnss\" size=\"10\" readonly=\"readonly\"/>";
-    //echo "</td>";
-
-    //$r = "";
-    //$r .= "<td>"; // 4. class="other_controls_td"
-
-    //$other_controls = "";
-    //$adminRow->other_controls_td = "<div>" // class="homepage_div"
-    $adminRow->homepage_div = "<label>"
-      . "Homepage %"
-      . "<input type=\"text\" size=\"3\" value=\"0\" id=\"rand_1\" name=\"rand_1\">";
-    //. "</div>";  // homepage_div
-    //$r .= "</td>"; // other_controls_td 
-    //echo $r;
-
-    //echo "</tr>";
-    //echo $adminRow->getHTML();
-    $tbody .= $adminRow->getHTML();
-    //echo "</tbody>";*/
-    $tbody ."</tbody>";
-    echo $tbody;
-    echo "</table>";
-
+/*   
     // 8. Now output the bottom controls
     echo "<div></div>"; //  style="clear:both";
     $redirectorCnt = count($redirectors);
@@ -932,56 +577,409 @@ class imbanditRedirector {
     $page = $_GET['page'];
     //echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
     echo "<input class=\"c_button_link\" type=\"submit\" value=\"Save All Settings\" />";
-    echo "<input type=\"hidden\" name=\"update\" value=\"yes\" />";
-    echo "</form>"; // end the form started a long time ago.
+    echo "<input type=\"hidden\" name=\"update\" value=\"yes\" />";*/
+    //echo "</form>"; // end the form started a long time ago.*/
 
     // redirector database clear button
     echo "<div id=\"reset_database_div\">";
     $page = $_GET['page'];
     echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
     echo "<input type=\"hidden\" name=\"redirector_databaseclear\" value=\"yes\" />";
-    echo "<input onclick=\"if(!confirm('Reset Database?')){ return false; };\" class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
+    //echo "<input onclick=\"if(!confirm('Reset Database?')){ return false; };\" class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
+    echo "<input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
     echo "</form>";
     echo "</div>"; // reset_database_div
 
     // linkscanner database rebuild button
     // This is not visible on the UI and thus cannot ever be triggered.
     // Essentially unused
-    echo "<form method=\"post\" action=\"options-general.php?page=$page\">";
-    echo "<input type=\"hidden\" name=\"linkscanner_databaseclear\" value=\"yes\" />";
-    echo "<br><br>";
-    echo "</form>";
+    //echo "<form method=\"post\" action=\"options-general.php?page=$page\">";
+    //echo "<input type=\"hidden\" name=\"linkscanner_databaseclear\" value=\"yes\" />";
+    //echo "<br><br>";
+    //echo "</form>";
     //<qqqphp
     //echo '<input type="submit" style="position:relative;float:left;display:inline;" class="" value="Reset Linkscanner Database" /></form></div>';
 
-    echo "</div>"; // save_reset_div
-    echo "</div>"; // thecenter
-    echo "<div></div>"; //  class="clear"
+    //echo "</div>"; // save_reset_div
+    //echo "</div>"; // thecenter
+    //echo "<div></div>"; //  class="clear"
 
   }
 
-  // called because of add_action(publish_post...
-  private function ls_singlepost_scan($post_id) {
-    $i = 5/0;
+  // The major part of the admin screen is displayed in a table.  This is the list of existing
+  // redirectors as well as an additional row to contain inputs for a new redirector.
+  // This function will emit that table.
+  private function imb_red_editor_table_contents() {
+
+    // 1. Start the table
+  	echo "<table id=\"redirectorTable\" class=\"widefat the_table\" style=\"width:1000px;\">";
+
+    // 2. Now output the column headers in the table header.
+    echo "<thead>";
+    echo   "<tr>";
+    echo     "<th>Custom Referrers</th>";
+    echo     "<th>&nbsp;</th>";
+    echo     "<th>Redirection URLs</th>";
+    echo     "<th>Link Scanner Found Targets</th>";
+    echo     "<th>Other Controls</th>";
+    echo   "</tr>";
+    echo "</thead>";
+
+    // 3. Now output the table body
+    echo "<tbody>";  // id=\"the-list\"
+
+    //$time_difference = get_settings('gmt_offset');
+    //$now = gmdate("Y-m-d H:i:s", time());
+
+    //$request = "SELECT ID, post_title, post_excerpt, post_type FROM " . $this->wpdb->posts . " WHERE post_status = 'publish' ";
+    //$posts = $this->wpdb->get_results($request);
+
+    //$request_post = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $table";
+    //$posts_post = $this->wpdb->get_results($request_post);
+    // single_pages_categories aka "category slubs + postIDs"
+    // url aka manual url targets
+    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $this->tableRedirectors";
+    $redirectors = $this->wpdb->get_results($redirectorsQuery);
+
+    $i = 1; // index of populated rows
+    $mns = ''; // the array of mn for the rows
+
+    //if ($redirectors) { // Test for the existence of any redirectors.
+
+    // 3.1 Iterate over all the existing redirectors, if any
+    // and emit a table-row to display them.
+    foreach ($redirectors as $redirector) {
+
+      $adminRow = new AdminRow();
+      // Can this be a list?
+      //$aff_url = $post_post->url;
+      //$aff_url = $redirector->url;
+      //$single_pages_categories = $post_post->single_pages_categories;
+      // single_pages_categories aka "category slubs + postIDs"
+      //$single_pages_categories = $redirector->single_pages_categories;
+
+      // Why do this? Why not just use $redirector->mn?
+      $mns[$i] = $redirector->mn;
+
+      $rpost = "";
+      if ($redirector->random_post == 1)
+      $rpost = 'checked="1"';
+
+      $rpage = "";
+      if ($redirector->random_page == 1)
+      $rpage = 'checked="1"';
+
+      //iterates through existing segments re-assigns MN if it already exists
+      //for ($j = 0; $j < $i; $j++) {
+      //if ($post_post->mn == $mns[$j] || $post_post->mn <= 9 || $post_post->mn >= 1000) {
+      //$mns[$i] = rand(10, 999);
+      //}
+      //}
+
+      // 3.1.1 single_pages_categories aka "category slugs + postIDs"
+      $adminRow->cat_slug_ids_div = "<input value=\"$redirector->single_pages_categories\" id=\"single_pages_categories_$i\" name=\"single_pages_categories_$i\" onkeyup=\"disableCheckboxes(this.value , $i);\">";
+
+      // 3.1.2 random referrers
+      // single_pages_categories aka "category slugs + postIDs"
+      // what is the relevance of that here? (look in the input tag)
+      //$adminRow->random_referrers_div ="<label for=\"random_post_$i\">"
+      //<input id="random_post_<qqqphp echo $i; QQQ>" name="random_post_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpost;QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ> onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
+      //. "<input id=\"random_post_$i\" name=\"random_post_$i\" type=\"checkbox\" $rpost >"
+      //. "Random Posts"
+      //. "</label>"
+      //. "<label for=\"random_page_$i\">"
+
+      //<input id="random_page_<qqqphp echo $i; QQQ>" name="random_page_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpage; QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ>onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
+      //. "<input id=\"random_page_$i\" name=\"random_page_$i\" type=\"checkbox\" $rpage >"
+      //. "Random Pages"
+      //. "</label>";
+
+
+
+      // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
+      // There can only be one regex associated with a given redirector.  Find that regex now.
+      $sql = "select * from $this->tableRegexes where mn = '$redirector->mn'";
+      $regexRow = $this->wpdb->get_results($sql,ARRAY_A);
+      ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
+      $adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_$i\" value=\"$regex\" type=\"text\"></input>";
+
+      // 3.1.4 manul url targets aka post_aff_url
+      //<div class="manual_url_targets_div">
+      //<div class="letter_label">(BC)</div>
+      //<strong>Manual URL Targets</strong>
+      // Plucked from a redirector table field.  Can this be a list?
+      //<textarea name="post_aff_url_<qqqphp echo $i; QQQ>" type="text-area" id="post_aff_url<qqqphp echo $i; QQQ>" ><qqqphp echo $aff_url; QQQ></textarea>
+      //$adminRow->manual_url_targets_div = "<textarea name=\"post_aff_url_$i\" type=\"text-area\" id=\"post_aff_url$i\" >$aff_url</textarea>";
+      //</div> <!-- manual_url_targets_div -->
+      //$co = explode('wp-admin', $_SERVER['REQUEST_URI']);
+      //$co = substr($co[0], 0, -1); //jared modified negative offset to -1, it used to be -2
+      //echo '<div><input name="" type="text" id="" value=""/>';
+      //echo "</td>"; // redirection_td
+
+      // 3.1.5 linkscanner_td (different than link_scanner_div)
+      $sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$redirector->mn'";
+      $links = $this->wpdb->get_results($sql, ARRAY_A);
+      $linksText = "";
+
+      foreach ($links as $link) {
+        $linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
+        //echo '<a href="' . $link['link'] . '" target="_new">' . $linkText . '</a>  ';
+        //$adminRow->link_scanner_div = "<a href=" . $link['link'] . " target=\"_new\">$linkText</a>";
+        $linksText .= $linkText.'&#13;';
+      }
+
+      $countLink = count($links);
+      $adminRow->linkscanner_td = "<textarea id=\"linkscanner_links_$i\">$linksText</textarea>"
+        . $countLink . " Posts";
+
+      //$n = $redirector->rand;
+
+      //$adminRow->homepage_div = "<label>"
+      //. "Homepage %"
+      //<input name="rand_<qqqphp echo $i; QQQ>" type="text" id="rand_<qqqphp echo $i; QQQ>" value="<qqqphp echo $post_post->rand; QQQ>" size="3"/>
+      //. "<input name=\"rand_$i\" type=\"text\" id=\"rand_$i\" value=\"$n\"  size=\"3\"/>"
+      //. "</label>";
+      //. "</div>";      // homepage_div
+
+      //<div class="mn_numbers_div">
+      //$adminRow->mn_numbers_div = "<label>"
+      //. "ID"
+      //<input name="mn_<qqqphp echo $i; QQQ>" type="text" id="mn_<qqqphp echo $i; QQQ>" value="<qqqphp echo $mns[$i]; QQQ>" size="3"/>
+      //. "<input name=\"mn_$i\" type=\"text\" id=\"mn_$i\" value=\"$mns[$i]\" size=\"3\"/>"
+      //. "</label>"
+      //. "<input name=\"id_$i\" type=\"hidden\" id=\"id_$i\" value=\"$redirector->id\"/>";
+      //<qqqphp
+      //$wltable = $this->wpdb->prefix . 'imb_whiteList';
+      //$mnNameQuery = "select * from $wltable where status=-1";
+      //$mnNames = $this->wpdb->get_results($mnNameQuery);
+      //if ($mnNames) {
+      //foreach ($mnNames as $mnNameDB) {
+      //$mnName =  $mnNameDB->refererRegex;
+      //}
+      //}
+      //if( $mnName == '' || $mnName == null){
+      //$mnName = 'mn';
+      //}
+      //<div class="other_url_div">
+      //<input class="c_button_link" type="button" onClick="alert_url('http:\/\/<qqqphp echo $_SERVER['HTTP_HOST'] . $co . '/?'.$mnName.'=' . $mns[$i]; QQQ>')" value="url" />
+      //$http_host = $_SERVER['HTTP_HOST'];
+      // todo fix $mnName and $co
+      //$adminRow->other_url_div = "<input class=\"c_button_link\" type=\"button\" onclick=\"alert_url('http:\/\/$http_host/?mn=$mns[$i]')\" value=\"url\" />";
+      //</div> <!-- other_url_div -->
+      //<div class="other_delete_div">
+      //<button class="c_button_link" onclick="if(!confirm('Delete This Entry?')){ return false; };" name="select_<qqqphp echo $i; QQQ>" id="select_<qqqphp echo $i; QQQ>" value="delete">delete</button>
+      //$adminRow->other_delete_div = "<button class=\"c_button_link\" onclick=\"if(!confirm('Delete This Entry?')){ return false; };\" name=\"select_$i\" id=\"select_$i\" value=\"delete\">delete</button>";
+      //$adminRow->other_delete_div = "<button "
+      //. "class=\"c_button_link\" "
+      //. "onclick=\"if(!confirm('Delete This Entry?')){ return false; };\" "
+      //. "name=\"delete_redirector\" "
+      //. "id=\"select_$i\" "
+      //. "value=\"$mns[$i]\">delete</button>";
+      //</div> <!-- other_delete_div -->
+      //$r .= "</td>"; // other_controls_td
+
+      //$adminRow->other_save_div = "<button "
+      //  . "class=\"c_button_link\" "
+      //  . "name=\"save_redirector\" "
+      //  . "id=\"select_$i\" "
+      //  . "value=\"$mns[$i]\"
+      //  . ">delete</button>";
+      // 3.2.6 save submit button
+      $adminRow->other_save_div = "<input name=\"save_redirector_$i\" class=\"c_button_link\" type=\"submit\" value=\"Save\" />";
+
+      echo $adminRow->getHTML();
+      //$tbody .= $adminRow->getHTML();
+      //	echo $n;*/
+      //$i++;
+    } // $redirectors as $redirector
+
+    //} // for$redirectors
+
+    // 3.2 Now emit a table row to contain the controls for a new redirector.
+    //$last = '';
+    $adminRow = new AdminRow();
+    $adminRow->populated = false; // This is the unpopulated data-entry row
+
+    // 3.2.1 category slugs + post ids, aka single_pages_categories
+    //$adminRow->cat_slug_ids_div = "<input name=\"single_pages_categories\" id=\"single_pages_categories\" type=\"text\" onkeyup=\"disableCheckboxesNew(this.value)\">";
+    $adminRow->cat_slug_ids_div = "<input name=\"single_pages_categories\" id=\"single_pages_categories\" type=\"text\" >";
+
+    // 3.2.2 random referrers
+    //$adminRow->random_referrers_div = "<label for=\"random_post\">"
+    //. "<input name=\"random_post\" id=\"random_post\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
+    //. "Random Posts"
+    //. "</label>"
+    //. "<label for=\"random_page\">"
+    //. "<input id=\"random_page\" name=\"random_page\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
+    //. "Random Pages"
+    //. "</label>";
+    //echo "</div>"; // random_referrers_div
+
+    // 3.2.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
+    $adminRow->link_scanner_div = "<input type=\"text\" id=\"ls_regex_new\" name=\"ls_regex_new\">";
+
+    // 3.2.4 manul url targets aka post_aff_url
+    //$adminRow->manual_url_targets_div = "<textarea name=\"post_aff_url\" type=\"text\" id=\"post_aff_url\"></textarea>";
+
+    // 3.2.5 linkscanner_td (different than link_scanner_div)
+    $newRedirectorMN = rand(10, 999); // new redirector mn number
+    //<input name="mn_upd" type="hidden" id="mn_upd" value="<qqqphp echo $newRedirectorMN; QQQ>" size="10" readonly="readonly"/>
+    $adminRow->linkscanner_td = "<input name=\"newRedirectorMN\" type=\"hidden\" id=\"newRedirectorMN\" value=\"$newRedirectorMN\" />";
+
+    // 3.2.6 other_controls_td
+    //$r .= "<td>"; // 4. class="other_controls_td"
+    //$other_controls = "";
+    //$adminRow->other_controls_td = "<div>" // class="homepage_div"
+
+    // 3.2.6.1 homepage_div
+    //$adminRow->homepage_div = "<label>"
+    //. "Homepage %"
+    //. "<input type=\"text\" size=\"3\" value=\"0\" id=\"rand_1\" name=\"rand_1\">";
+    //. "</div>";  // homepage_div
+    //$r .= "</td>"; // other_controls_td
+    //echo $r;
+    //echo "</tr>";
+
+    // 3.2.6.2 save submit button
+    $adminRow->other_save_div = "<input name=\"save_redirector\" class=\"c_button_link\" type=\"submit\" value=\"Save\" />";
+
+    echo $adminRow->getHTML();
+    echo "</tbody>";
+    echo "</table>";
+  }
+
+  // This function will find the linkscanner links associated with the given redirector.
+  // It will return an array of links.
+  private function getLinkscannerLinks() {
+    // Now populate the linkscanner URLs aka ls_regex from the regex table
+    //add where mn
+    //$sql = "SELECT * FROM " . $regexTable
+    //. " where mn=" . $mns[$i];
+    //$sql = "select * from $this->tableRegexes where mn = \"$redirector->mn\" ";
+    //" ORDER BY id "; // what diff does the order make?
+    //$regexes = $this->wpdb->get_results($sql, ARRAY_A);
+
+    // Substantial duplication within these two branches...
+    // The duplicated code computes $showAllLinkText and $countLink
+    // for subsequent use.
+    //$countLink = 0;
+    //$showAllLinkText = '';
+    $retVal = array();
+
+    //if (count($regexes) == 0) {
+      // This branch looks useless, when we we have a redirector w/o a regex?
+      $i = 5/0;
+      // DUP1 - Find all records in linkscanner table where the spc is
+      // included in the redirector table, the mn is the same, and regex = ''
+      //$lsTable = $this->wpdb->prefix . 'imb_linkscanner';
+      // single_pages_categories aka "category slubs + postIDs"
+      //$spcStr = str_replace(",","','",$single_pages_categories);
+
+      //$sql = "SELECT * FROM " . $lsTable
+      //  . " WHERE mn = '" . $mns[$i]
+      //  . "' and single_pages_categories in ('".$spcStr."') and regex='' ORDER BY RAND()  ";
+      //$links = $this->wpdb->get_results($sql, ARRAY_A);
+      // /DUP1
+
+    // DUP2 - Examine all links found and build a concatenated
+    //        string of them, suitably truncated to fit.  Also
+    //        count them.
+    //foreach ($links as $link) {
+      //$linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
+      //echo '<a href="' . $link['link'] . '" target="_new">' . $linkText . '</a>  ';
+      //$adminRow->link_scanner_div = "<a href=" . $link['link'] . " target=\"_new\">$linkText</a>";
+      //$showAllLinkText .= $linkText.'&#13;';
+      //$countLink++;
+    //}
+    // /DUP2
+
+      // ls_regex_new aka linkscanner urls
+      //echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '"  type="text" ></input>';
+    //} else {
+
+      // More useless.  We will never have multiple regexes, only one.
+      //foreach ($regexes as $regexItem) {
+
+        // DUP1 - Find all records in linkscanner table where the spc is
+        // included in the redirector table, the mn is the same, and regex is the same.
+        //$lsTable = $this->wpdb->prefix . 'imb_linkscanner';
+        // single_pages_categories aka "category slubs + postIDs"
+        //$spcStr = str_replace(",","','",$single_pages_categories);
+        //link scanner sql
+        //$regexItemB64 = base64_decode($regexItem['regex']);
+        $sql = "SELECT * FROM " . $this->tableLinkscanners;
+        //. " WHERE mn = '" . $regexItem['mn']
+        //. "' and single_pages_categories in ('".$spcStr."') and "
+        //. "regex='".$regexItemB64."' ORDER BY RAND()  ";
+        //$links = $this->wpdb->get_results($sql, ARRAY_A);
+        // /DUP1
+
+        //if ($regexItemB64) {
+        // ls_regex_new aka linkscanner urls
+        // echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '" value="' . base64_decode($regexItem['regex']) . '" type="text"></input>';
+        // Warning! This is repeatedly setting the displayed regex to the most recently found regex.
+        // This only works correctly if there is only one regex.  Is this what is intented?
+        // The adminRow is set after this if block
+        //$regex = $regexItem['regex'];
+        //$adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_$i\" value=\"$regex\" type=\"text\"></input>";
+        //} else {
+        // ls_regex_new aka linkscanner urls
+        //echo '<input name="ls_regex_new_' . $i . '" id="ls_regex_new_' . $i . '"  type="text" ></input>';
+        //$adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_\$i\"  type=\"text\" ></input>";
+        //}
+
+        // DUP2
+        //foreach ($links as $link) {
+        //$linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
+        //echo '<a href="' . $link['link'] . '" target="_new">' . $linkText . '</a>  ';
+        //$showAllLinkText .= $linkText.'&#13;';
+        //$showAllLinkText = "";
+        //$countLink++;
+        //}
+        // /DUP2
+
+        // unused
+        //if (isset($this->postsFound[$link['mn']]))
+        //echo '<br/>';
+        //if (isset($this->postsFound[$link['mn']]))
+        //echo ' Posts Found: ' . $this->postsFound[$link['mn']];
+        //if (isset($linksFound[$link['mn']]))
+        //echo ' Links Found: ' . $this->linksFound[$link['mn']];
+      //} // for each regex item
+    //} // count($regexes) == 0
+  }
+
+  // This method is called whenever a new post is published,
+  // due to the add_action(publish_post... hook.
+  public function ls_singlepost_scan($post_id) {
     //$ls_table = $this->wpdb->prefix . 'imb_linkscanner';
     //$jsim_url_regex = get_option('jsim_url_regex');
     //global $jsim_url_regex;
-    //==================Single Scan on Publish===================
     //last published post
+
     //$posts = $this->wpdb->prefix . 'posts';
     //$sql = "SELECT * FROM " . $posts . " WHERE post_parent=0 ORDER by id desc";
-    //$last_post = $this->wpdb->get_row($sql, ARRAY_A);
+  	//$last_post = $this->wpdb->get_row($sql, ARRAY_A);
     //$postid = $last_post['ID'];
+    //$newPost = $this->wpdb->get_post($post_id);
+    //$newPost = get_post($post_id);
+    
+    // This section will read the entire regex table and 
+    // compare the new post to each record.
     //$regexTable = $this->wpdb->prefix . 'imb_regex';
     //$sql = "SELECT * FROM " . $regexTable . " ORDER BY id ";
-    //$regexes = $this->wpdb->get_results($sql, ARRAY_A);
+    $sql = "SELECT * FROM $this->tableRegexes"; // who cares about the order?
+    $regexes = $this->wpdb->get_results($sql, ARRAY_A);
     //$handle=fopen('/var/www/wp2/log.txt' , 'w');
-    //foreach ($regexes as $regex) {
-    //fputs($handle, $regex['mn'].$regex['regex']);
-    //$this->ls_scan_all($regex['mn'], base64_decode($regex['regex']), $postid);
-    //}
+    foreach ($regexes as $regex) {
+      //fputs($handle, $regex['mn'].$regex['regex']);
+
+      // only send $postid _or_ $spc, never both.
+      // In this case, only a single $post_id is relevant, therefore only send that
+      //$this->linkscan($regex['mn'], base64_decode($regex['regex']), $postid);
+      $this->linkscan($regex['mn'], $regex['regex'], $post_id);
+    }
     // fclose($handle);
-    //==================End Single Scan==========================
   }
 
   // called because of add_action(admin_menu...
@@ -1011,10 +1009,9 @@ class imbanditRedirector {
 
   // called because of add_action(wp_head...
   // What does this do?
-  public function wp_add_red($unused) {
-    $i = 5/0;
+  //public function wp_add_red($unused) {
     //echo "<qqqphp if (private function_exists('wp_jdis()()')) if (wp_jdis()()) exit(); QQQ>";
-  }
+  //}
 
   // called because of add_action(get_header...
   public function wp_imb_red_head() {
@@ -1119,7 +1116,7 @@ class imbanditRedirector {
     $this->wpdb->query($sql);
   }
 
-  // Drop the imb_linkscanner table, if it exists, and then
+  // Drop the imb_regex table, if it exists, and then
   // recreate it.
   private function resetRegexes() {
 
@@ -1131,7 +1128,7 @@ class imbanditRedirector {
 
     $sql = "CREATE TABLE " . $this->tableRegexes . " (
       `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-      `regex` varchar(255) COLLATE utf8_turkish_ci NOT NULL,
+      `regex` varchar(255) NOT NULL,
       `mn` int(4) NOT NULL,
       PRIMARY KEY (`id`),
       UNIQUE KEY `UX1` (`mn`)
@@ -1139,7 +1136,7 @@ class imbanditRedirector {
     $this->wpdb->query($sql);
   }
 
-  // Drop the imb_linkscanner table, if it exists, and then
+  // Drop the imb_whitelist table, if it exists, and then
   // recreate it.
   private function resetWhitelists() {
 
@@ -1156,6 +1153,23 @@ class imbanditRedirector {
       PRIMARY KEY ( `id` )
       ) AUTO_INCREMENT =1 DEFAULT CHARSET = cp1251";
     $this->wpdb->query($sql);
+  }
+
+  // This function will iterate over all the posts and then
+  // use the WP API to individually delete them.
+  private function eraseAllPosts() {
+
+    $sql = "SELECT * FROM " . $this->tablePosts;
+    $posts = $this->wpdb->get_results($sql, ARRAY_A);
+    foreach ($posts as $post) {
+      $postid = $post['ID'];
+      wp_delete_post($postid, true /* delete, no trashcan */);
+    }
+
+    // Now reset the autoincrement postid to 1.  This will
+    // help Selenium keep track of the postids for it's purposes.
+    $sql = "alter table $this->tablePosts auto_increment = 1";
+    $this->wpdb->get_results($sql);
   }
 
   // Drop the imb_redirector table, if it exists, and then
@@ -1183,20 +1197,17 @@ class imbanditRedirector {
     $this->wpdb->query($sql);
   }
 
-  //Redirection private functions - this makes the page redirect when ref. arrives. important
+  // This function implements the redirection, if any is desired for a particular page view.
   private function wp_jdis() {
-    //grab control level
+
+    //ignore archives
+    if (is_archive()) return false;
+
+    // Determine control level
     // what is control level? why the gyrations?
     //if (isset($_POST['level'])) {
     //$level = $_POST['level'];
     //}
-    //ignore archives
-    if (is_archive()) return false;
-
-    // dont' think this is used anywhere
-    //global $post;
-    // name of the MySQL redirector table
-    //$redirector_table = $this->wpdb->prefix . 'imb_redirector';
 
     // wtf does this mean? Comment out of place
     //overwrite $mn from $_POST if $_GET is present
@@ -1219,11 +1230,14 @@ class imbanditRedirector {
     //if ($mnName) {
     //$mn = $_GET[$mnName];
     //} else {
-    $mn = $_GET['mn'];
+    if (isset($_GET['mn']))
+      $mn = $_GET['mn'];
+
     //$mnName = mn;
     //}
-    // If no MN and no $_POST['level'] then return because then its a normal blog page view...just get out of the way
+    // If no $mn and no $_POST['level'] then return because then its a normal blog page view...just get out of the way
     // what the purpose of $_POST['level']
+    // $mn should have been set earlier, if applicable.
     if (!isset($mn) && !isset($_POST['level'])) {
       return false;
       //exit(); // dead code
@@ -1609,82 +1623,78 @@ class imbanditRedirector {
     //}
   //}
 
-  private function ls_scan_all($mn, $regex = NULL, $postid = NULL,$spc = NULL) {
-    //$this->postsFound = array();
-    //$this->linksFound = array();
-    //$ls_table = $this->wpdb->prefix . 'imb_linkscanner';
-    $jsim_url_regex = get_option('jsim_url_regex');
-    $postStr = NULL;
-    //get posts in the spc
 
-    //$spcTable = $this->wpdb->prefix . 'terms';
+  // This method will find all the posts associated with $postid _or_ $spc,
+  // scan said posts for links that match $regex, and update the linkscanner db with
+  // these links.
+  //
+  // $postid and $spc both come from category slugs + PostIDS aka spc, which can be a comma delimited list
+  // with both types mixed together.  The caller of linkscan is responsible for processing this list and
+  // for sending only one of them at a time to this method.
+  // This method will therefore only receive one $postid _or_ $spc at a time, but never both.
+  // How this method finds posts associated with $postid or $spc differs.
+  private function linkscan($mn, $regex = NULL, $postid = NULL,$spc = NULL) {
 
-    // This is not necessary.  In all cases where this method is called, in the original code
-    // the $spc param is not a comma delimited list, have been created by possibly breaking down
-    // an original comma delimited list
-    $spcStr = str_replace(",","','",$spc);
-    //if( is_numeric( $spc) ){
-    //$postid = $spc;
-    //}
+    // 1. How the relevant posts are found depends upon whether or not $postid or $spc is provided.
+    //    This is will build $postStr which is the single difference between the two possible
+    //    sql queries on the posts table, for subsequent execution.
+    if ($spc) {
+      // 1.1 If $spc is sent, then search for all posts tagged with this category 
+      // and ignore $postid, even if present
 
-    // This select appears to be performing a case-insensitive match on the name field.
-    // hence 'atlanta' will match 'Atlanta'.  Performing the same query using phpmyadmin
-    // causes a case-sensitive search and the aforementioned query would fail.  Beware!
-    //$sql2Spc = "SELECT * FROM ". $spcTable . " WHERE name in ('".$spcStr."')";
-    $sql2Spc = "SELECT * FROM ". $this->tableTerms . " WHERE name in ('".$spcStr."')";
-    $terms = $this->wpdb->get_results($sql2Spc);
+      //$this->postsFound = array();
+      //$this->linksFound = array();
+      //$postStr = NULL;
+      //get posts in the spc
 
-    // This method creates a comma delimited list of termIDs, but with a trailing comma at the end.
-    // When this is fed into the subsequent TermRelationships query, the trailing comma gets turned into
-    // a ''.  This may cause unexpected behavior.  Warning!
-    $termIds = '';
-    if ($terms) {
-      foreach ($terms as $term) {
-        $termIds .=  $term->term_id.",";
+      // The information can be found using a 3 level join.  The old edition did not do this
+      // and instead used two queries and a lot of code.  Replace the old with a proper join query.
+      // This select appears to be performing a case-insensitive match on the name field.
+      // hence 'atlanta' will match 'Atlanta'.  Performing the same query using phpmyadmin
+      // causes a case-sensitive search and the aforementioned query would fail.  Beware!
+      //$sql = "SELECT * FROM ". $this->tableTerms . " WHERE name in ('".$spc."')";
+      //$terms = $this->wpdb->get_results($sql);
+
+      // This code creates a comma delimited list of termIDs, but with a trailing comma at the end.
+      // When this is fed into the subsequent TermRelationships query, the trailing comma gets turned into
+      // a ''.  This may cause unexpected behavior.  Warning!
+      //$termIds = '';
+      //foreach ($terms as $term) {
+        //$termIds .=  $term->term_id.",";
+      //}
+
+      //$termIdsStr = str_replace(",","','",$termIds);
+      //$sql2SpcRel = "SELECT * FROM ". $this->tableTermRelationships . " WHERE term_taxonomy_id in ('".$termIdsStr."')";
+      //$postIdFromTerms = $this->wpdb->get_results($sql2SpcRel);
+      $sql = "select object_id from wp_term_relationships left join "
+        . "wp_term_taxonomy on wp_term_relationships.term_taxonomy_id = wp_term_taxonomy.term_taxonomy_id left join "
+        . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$spc')";
+      $postIdFromTerms = $this->wpdb->get_results($sql);
+      $postIds = '';
+      foreach ($postIdFromTerms as $postIdFromTerm) {
+        if(!$postIds){
+          $postIds = $postIdFromTerm->object_id;
+        }else {
+          $postIds .=  ",".$postIdFromTerm->object_id;
+        }
       }
+
+      $postStr = " AND ID in ('$postIds')";
+
+    } else {
+      // 1.2 If not $spc, then assume $postid is sent.  Assuming so, read only this one post and ignore $spc
+      $postStr = " AND ID = '$postid'";
     }
 
-    $termIdsStr = str_replace(",","','",$termIds);
-    //$spcRelTable = $this->wpdb->prefix . 'term_relationships';
-    //$sql2SpcRel = "SELECT * FROM ". $spcRelTable . " WHERE term_taxonomy_id in ('".$termIdsStr."')";
-    $sql2SpcRel = "SELECT * FROM ". $this->tableTermRelationships . " WHERE term_taxonomy_id in ('".$termIdsStr."')";
-    $postIdFromTerms = $this->wpdb->get_results($sql2SpcRel);
-
-    // Create the list of post_ids that are tagged with whatever category
-    // do we need this if ?
-    //if ($postIdFromTerms) {
-    $postIds = '';
-    foreach ($postIdFromTerms as $postIdFromTerm) {
-      // $postIds gets defined here
-      if(!$postIds){
-        $postIds = $postIdFromTerm->object_id;
-      }else{
-        $postIds .=  ",".$postIdFromTerm->object_id;
-      }
-    }
-    //}
-
-    //if postid is set, it will act as a single scan
-    if ($postid != NULL) {
-      $i = 5/0;
-    //$postStr = " AND ID = '$postid'";
-    }
-    elseif ($spc != NULL) {
-      if($postIds){
-        // doh! original code doesn't use this!
-        // what is this supposed to do? replace the first character with a blank? append a blank?
-        // doesn't do any of these things.  Doesn't do anything at all.
-        //$n = $postIds; // save a copy for now good reason
-        //substr_replace($postIds,' ','0','1'); 
-      }
-      $postStr = " AND ID in ($postIds)";
-    }
-
-    //$postsTable = $this->wpdb->prefix . 'posts';
+    // 2. Now retrieve the relevant posts
     $sql = "SELECT * FROM " . $this->tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
-      . "AND post_type = 'post' $postStr ORDER by id desc";
+      . "AND post_type = 'post' $postStr ";
+    //ORDER by id desc"; // who cares what order?
     $posts = $this->wpdb->get_results($sql, ARRAY_A);
-    //foreach ($posts as $last_post) {
+
+    // 3. Iterate over all the posts and examine them for matching links.  Deal with
+    //    whatever matched links are found.
+    $jsim_url_regex = get_option('jsim_url_regex'); // regex to recognize a url
     foreach ($posts as $post) {
 
       $pid = $post['ID'];
@@ -1752,10 +1762,25 @@ class imbanditRedirector {
             //DUAL is purely for compatibility with some other database servers that require a FROM clause. MySQL does not require the clause if no tables are referenced."
             //http://forums.mysql.com/read.php?10,69223,69226#msg-69226
             // single_pages_categories aka "category slubs + postIDs"
-            $sql = "INSERT INTO " . $this->tableLinkscanners . " (postid, link, mn, regex, single_pages_categories)  SELECT '$pid','$url' , '$mn','$regex','$spc' FROM dual WHERE not exists(select id from ".$this->tableLinkscanners." where mn='".$mn."' and link='".$url."'  and regex='".$regex."' and single_pages_categories='".$spc."')";
+            // I think these are trying to insert a new row w/o creating a "duplicate"
+            // I don't think this is necessary.  Some of the fields of the linkscanner table are not necessary.  Let's review the
+            // fields and decide:
+            // id - primary key.  Keep it.
+            // postid - which post does this link come from?  We'll need this as the referrer for the 
+            //          final redirection.  Keep it.
+            // mn - This is acting as a foreign key into the imb_redirector table to identify which
+            //      redirector spawned this linkscanner record.  However, mn is not unique and this may cause problems.
+            //      For now, let's blank it and see if it's missed.
+            // link - Well duh! Gotta have this.
+            // single_pages_categories.  This only serves as a debugging aid to tell us which spc resulted in this
+            //      linkscanner record.  This seems useless so let's blank it for now.
+            // regex.  Ditto above.
+
+            //$sql = "INSERT INTO " . $this->tableLinkscanners . " (postid, link, mn, regex, single_pages_categories)  SELECT '$pid','$url' , '$mn','$regex','$spc' FROM dual WHERE not exists(select id from ".$this->tableLinkscanners." where mn='".$mn."' and link='".$url."'  and regex='".$regex."' and single_pages_categories='".$spc."')";
             //bug
             //$sql = "INSERT INTO " . $ls_table . " (postid, link,mn) VALUES ('$pid','$url' , '$mn') on DUPLICATE KEY UPDATE link='$url'";
-            $this->wpdb->query($sql);
+            $sql = "insert into $this->tableLinkscanners (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
+          	$this->wpdb->query($sql);
           }
         //}
       } // if preg_match_all
