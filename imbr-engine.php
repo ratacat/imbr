@@ -14,7 +14,7 @@ class imbanditRedirector {
   private $tableTermRelationships;
   private $tableWhitelists;
 
-  // This is the constructor for the imbr plugin class.  Its basic 
+  // This is the constructor for the imbr plugin class.  Its basic
   // goal is to set 8 hooks that are executed whenever certain events happen.
   // This is fundamentally how control is passed to the plugin code.
   public function __construct($wpdb) {
@@ -53,18 +53,140 @@ class imbanditRedirector {
     $this->tableWhitelists        = $wpdb->prefix . 'imb_whitelist';
   }
 
-  // called because of add_action(init...
-  // we enqueue this same file in enqueIMBR_CSS.  Why do it in two places?
-  //public function enqueueBackendFiles() {
-    //wp_enqueue_script("controls.js", "/wp-includes/js/controls.js", array(), "0.0.1", true);
-  //}
-
-  // called because of register_deactivation_hook
-  private function imb_deactivate() {
-    $options = $this->getOptions();
-    $options['apiKey'] = '';
-    update_option('imbandit', $options);
+  // Because we have hooked the admin_menu action, this code will be called at that time.
+  // This function will add the IMBR choice to the Settings menu.  Doing so involves
+  // specifiying another function to be called when the choice is selected.
+  public function addIMBROptionToAdminScreen() {
+  	add_options_page('IMBR', 'IMBR', 'manage_options', __FILE__, array(&$this, 'imb_red_editor'));
   }
+
+  //
+  // This function implements the redirection, if any is desired for a particular page view.
+  // Redirection is requested by passing the parameter "mn=x" where x is some valid redirector record.
+  //
+  // Any call to an ordinary page or post (not the admin section) will result in this code
+  // getting called.  The first step is to weed out calls that don't want redirection.
+  //
+  // There are two phases for a given redirection request and for each phase this function will be called.
+  // We use a POST parameter "redirectionPhase" (formerly "level") to communicate which phase of
+  // the process is happening.
+  //
+  // In phase 1, we determine which onsite post should receive the initial redirection and
+  // which offsite URL should receive the final redirect.  Then we redirect to the onsite post, via
+  // a POST request, passing the offsite URL as a POST parameter.
+  // Said request will result in this function getting executed again for phase 2.
+  //
+  // In phase 2, we simply redirect again, this time to the given offsite page, via a GET.
+  public function doRedirection() {
+
+    // 1. Look for useful parameters in the POST
+
+    // 1.1 Determine redirectionPhase
+    $redirectionPhase = "";
+    if (isset($_POST['redirectionPhase']))
+      $redirectionPhase = $_POST['redirectionPhase'];
+
+    // 1.2 Determine mn.  mn only comes from the initial GET request, not from any subsequent POST requests.
+    $mn = ""; // nada
+    if (isset($_GET['mn']))
+      $mn = $_GET['mn'];
+
+    // 2. Weed out requests that do not want redirection
+
+    // 2.1 Ignore archives
+    if (is_archive()) return; // false;
+
+    // 2.2 If no $mn and no $redirectionPhase then this request is a normal page view.
+    // Just return a get out of the way
+    if ($redirectionPhase == "")
+      if ($mn == "")
+        return;
+      else
+        $redirectionPhase = "1"; // this is the start of phase 1
+
+    // 3. Now process a particular $redirectionPhase
+    switch($redirectionPhase) {
+      case "1":
+        $this->doRedirection_Phase1($mn);
+        break;
+      case "2":
+        $this->doRedirection_Phase2($mn);
+        break;
+      default:
+        $i = 5/0; // shouldn't happen
+    }
+  }
+
+  // This function will implement phase 1 of the redirection, which is the
+  // bulk of the work for the entire process.  In phase 1 we will determine everything
+  // necessary to complete the redirection, such as which post to initially bounce to and
+  // which off-site target to ultimately redirect to.  At the end of this method, we will
+  // redirect to the appropriate post sending the minimal amount of info required
+  // to redirect again to the final destination.
+  //
+  // Don't know what the return value does.
+  private function doRedirection_Phase1($mn) {
+  
+  	// 1. Get the redirector record
+  	$sql = "select * from $this->tableRedirectors where mn='$mn'";
+  	$redirector = $this->wpdb->get_row($sql);
+  
+  	// 2. Find one random linkscanner link that matches this mn, if any.
+  	$sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
+  	$linkscanner_row = $this->wpdb->get_row($sql);
+  
+  	// 3. Now determine the onsite redirection post and ultimate offsite target.
+  	if ($linkscanner_row) {
+  		// 3.1. Because this redirector has at least one associated linkscanner, treat
+  		// this redirection as route A.
+  		$ls_postid = $linkscanner_row->postid;
+  		$hopLink = get_permalink($ls_postid);
+  	} else if ($redirector->url != "") {
+  		// 3.2. Because this redirector has no linkscanner links, but does
+  		// have manual urls, treat this redirection as route B.
+  
+  		// 3.2.1. First find a random relevant post associated with the spc
+  		$relevantPosts = $this->findAllRelevantPosts($redirector->single_pages_categories);
+  		$randomPostIdx = array_rand($relevantPosts);
+  
+  		// 3.2.2. Next find a random manual target.  Assume the manual target
+  		// field may be a \n delimited list of urls.
+  		$manual_urls = explode( "\n" , $redirector->url);
+  		$manual_urlIdx = array_rand($manual_urls);
+  
+  		$hopLink = get_permalink($relevantPosts[$randomPostIdx]['ID']);
+  	}
+  
+  	// Now create a form and then submit it.  This causes a post to the onsite redirection page.
+  	echo "<html>";
+  	echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
+  	echo   "<body>";
+  	echo     "<form action='$hopLink' method='post' id='form1'>";
+  	echo        "<input type='hidden' name='offsiteURL' value='$manual_urls[$manual_urlIdx]' />";
+  	echo        "<input type='hidden' name='redirectionPhase' value='2' />";
+    echo      "</form>";
+    echo     "<script language='JavaScript'>document.getElementById('form1').submit();</script>";
+    echo   "</body>";
+    echo "</html>";
+  
+  }
+  
+    // This function will implement phase 2 of the redirection.  It will receive
+    // an off-site URL (as a POST param) and redirect there.
+    // Don't know what the return value does.
+    private function doRedirection_Phase2($mn) {
+  
+    //Create Form
+    	echo "<html>";
+    	echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
+    echo   "<body>";
+      $offsiteURL = $_POST['offsiteURL'];
+    echo     "<form action='$offsiteURL' method='get' id='form1'>";
+      echo     "</form>";
+      echo     "<script language='JavaScript'>document.getElementById('form1').submit();</script>";
+    echo   "</body>";
+      echo "</html>";
+    }
 
   // This is how we arrange to get custom IMBR CSS injected into the admin screen.
   public function enqueIMBR_CSS() {
@@ -72,19 +194,299 @@ class imbanditRedirector {
     wp_enqueue_style('admin_styles');
   }
 
-  // When the IMBR Admin screen "save all settings" button is pressed, this function will be invoked.
-  // This function will save changes where the user has done any combination of:
-  // 1. Changed anything about the existing redirector records
-  // 2. Created a new redirector
-  // 3. Modified the whitelist
-  // 4. Modified the mn parameters
-  //private function red_editor_save() {}
+  // This function will iterate over all the posts and then
+  // use the WP API to individually delete them.
+  private function eraseAllPosts() {
+
+    $sql = "SELECT * FROM " . $this->tablePosts;
+    $posts = $this->wpdb->get_results($sql, ARRAY_A);
+    foreach ($posts as $post) {
+      $postid = $post['ID'];
+      wp_delete_post($postid, true /* delete, no trashcan */);
+    }
+
+    // Now reset the autoincrement postid to 1.  This will
+    // help Selenium keep track of the postids for it's purposes.
+    $sql = "alter table $this->tablePosts auto_increment = 1";
+    $this->wpdb->get_results($sql);
+  }
+
+  // Because we have hooked the publish_post action, this function will be
+  // called whenever a new post is published.
+  public function handleNewPost($post_id) {
+  	$sql = "SELECT * FROM $this->tableRegexes"; // who cares about the order?
+  	$regexes = $this->wpdb->get_results($sql, ARRAY_A);
+  	foreach ($regexes as $regex)
+  		$this->linkscan($regex['mn'], $regex['regex'], $post_id);
+  }
+
+  // called because of register_deactivation_hook
+  private function imb_deactivate() {
+  	$i = 5/0;
+  	exit();
+    $options = $this->getOptions();
+    $options['apiKey'] = '';
+    update_option('imbandit', $options);
+  }
+
+  // This function is the entry point for the functionality to display/manage/save
+  // the IMBR options settings page.  This settings page is fairly complicated
+  // so this function will call subfunctions that will generate the various elements
+  // of the HTML.
+  //
+  // Given an ordinary GET request, this function, as well as the
+  // related subfunctions, will display the existing contents of the IMBR options.
+  // However, if this function is called with a POST request then other functionality
+  // may be performed first, such as saving of changed options or resetting the db, before
+  // proceeding onto the ordinary display of the now updated information.
+  //
+  // As mentioned earlier, this is the entry point for producing the admin screen.  This
+  // screen is composed of several nested html elements and the code that generates that
+  // is subdivided accordingly.
+  public function imb_red_editor() {
+
+    // 1. In the event this function has been called via a POST request,
+    // look for certain commands as POST parameters and execute them first,
+    // and then continue with the ordinary display of the admin screen.
+    // The if-else structure ensures that only one option will
+    // run and only the first option that passes, even if
+    //other options might also pass.
+
+    // 1.1 Reset the database?
+    if (isset($_POST['redirector_databaseclear'])) {
+      $this->resetDatabase();
+
+    // 1.2 Delete a specific redirector
+    //if (isset($_POST['delete_redirector'])) {
+    //$query = "delete from $this->tableRedirectors where mn = '$_POST['delete_redirector']'";
+    //$redirector = $_POST['delete_redirector'];
+    //$query = "delete from $this->tableRedirectors where mn = '$redirector'";
+    //$this->wpdb->query($query);
+
+    // 1.3 Save the contents of a single existing or new redirector record
+    } else if (isset($_POST['save_redirector'])) {
+      $this->redirector_save();
+    }
+
+    // 2. The entire IMBR admin page fits inside this div.
+    echo "<div class=\"wrap\">";
+    echo   $this->imb_red_editor_level1();
+    echo "</div>";
+  }
+
+  // This 1st level wrap div wraps a 2nd level, wrapper div.  Why?
+  private function imb_red_editor_level1() {
+    echo "<div style=\"clear:both\">";
+    echo   $this->imb_red_editor_level2();
+    echo "</div>";
+    echo "<div class=\"clear\"></div>";
+  }
+
+  // This 2nd level wrap div essentially wraps a 3rd level center tag.  Why?
+  private function imb_red_editor_level2() {
+    echo "<br>";
+    echo "<center>";
+    echo   $this->imb_red_editor_level3();
+    echo "</center>";
+  }
+
+  // All of the IMBR admin screen is inside this 3rd layer wrapper.
+  private function imb_red_editor_level3() {
+
+    // 1. Now display the IMBR logo and revision.
+    echo "<img src=\"../wp-content/plugins/imbr/imbr.png\"><br>$this->imbV<br><br><br><br>";
+
+    // 2. Emit the Instruction Box HTML
+    echo "<div id=\"instruction_box\">";
+
+    echo   "<div class=\"info_box\">";
+    echo     "<strong>A Route</strong> - Scans all Categories + individual PostIDs for any links containing /regex/. Randomly Chooses one /regex/ link to redirect to and uses the parent as the referrer.";
+    echo   "</div>";
+
+    echo   "<div class=\"info_box\">";
+    echo     "<strong>B Route</strong> - Randomly chooses  post from within the categories/postids to use as the referrer, and then randomly chooses a Manual URL to redirect to.";
+    echo   "</div>";
+
+    echo   "<div class=\"info_box\">";
+    echo     "<strong>C Route</strong> - Randomly selects referrers from ALL posts, ALL pages, or BOTH. And redirects to a random Manual URL.";
+    echo   "</div>";
+
+    //echo "<div></div>"; // class=\"clear\"
+  	echo "</div>"; // instruction_box
+  	echo "<br><br>";
+
+    // 3. The major part of the admin screen is displayed in a table.  This is the list of existing
+    // redirectors as well as an additional row to contain inputs for a new redirector.
+    // Emit that table now.
+    $this->imb_red_editor_table_contents();
+
+    // 4. redirector database clear button
+    echo "<div id=\"reset_database_div\">";
+    $page = $_GET['page'];
+    echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
+    echo "<input type=\"hidden\" name=\"redirector_databaseclear\" value=\"yes\" />";
+    echo "<input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
+    echo "</form>";
+    echo "</div>"; // reset_database_div
+  }
+
+  // The major part of the admin screen is displayed in a table.  This is the list of existing
+  // redirectors as well as an additional row to contain inputs for a new redirector.
+  // This function will emit that table.
+  private function imb_red_editor_table_contents() {
+
+    // 1. Start the table
+    echo "<table id=\"redirectorTable\" class=\"widefat the_table\" style=\"width:1000px;\">";
+
+    // 2. Now output the column headers in the table header.
+    echo "<thead>";
+    echo   "<tr>";
+    echo     "<th>Custom Referrers</th>";
+    echo     "<th>&nbsp;</th>";
+    echo     "<th>Redirection URLs</th>";
+    echo     "<th>Link Scanner Found Targets</th>";
+    echo     "<th>Other Controls</th>";
+    echo   "</tr>";
+    echo "</thead>";
+
+    // 3. Now output the table body
+    echo "<tbody>";  // id=\"the-list\"
+
+    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $this->tableRedirectors";
+    $redirectors = $this->wpdb->get_results($redirectorsQuery);
+
+    // Don't need this any more
+    //$i = 1; // index of populated rows
+    //$mns = ''; // the array of mn for the rows
+
+    // 3.1 Iterate over all the existing redirectors, if any
+    // and emit a table-row to display them.
+    foreach ($redirectors as $redirector) {
+
+      $adminRow = new AdminRow();
+      $adminRow->mn = $redirector->mn;
+
+      $rpost = "";
+      if ($redirector->random_post == 1)
+        $rpost = 'checked="1"';
+
+      $rpage = "";
+      if ($redirector->random_page == 1)
+        $rpage = 'checked="1"';
+
+      // 3.1.1 single_pages_categories aka "category slugs + postIDs"
+      $adminRow->cat_slug_ids_div = "<input value='$redirector->single_pages_categories' name='single_pages_categories' >";
+
+      // 3.1.2 random referrers
+      // single_pages_categories aka "category slugs + postIDs"
+      //$adminRow->random_referrers_div ="<label for=\"random_post_$i\">"
+      //<input id="random_post_<qqqphp echo $i; QQQ>" name="random_post_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpost;QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ> onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
+      //. "<input id=\"random_post_$i\" name=\"random_post_$i\" type=\"checkbox\" $rpost >"
+      //. "Random Posts"
+      //. "</label>"
+      //. "<label for=\"random_page_$i\">"
+
+      //<input id="random_page_<qqqphp echo $i; QQQ>" name="random_page_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpage; QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ>onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
+      //. "<input id=\"random_page_$i\" name=\"random_page_$i\" type=\"checkbox\" $rpage >"
+      //. "Random Pages"
+      //. "</label>";
+
+      // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
+      // There can only be one regex associated with a given redirector.  Find that regex now.
+      $sql = "select * from $this->tableRegexes where mn = '$redirector->mn'";
+      $regexRow = $this->wpdb->get_results($sql,ARRAY_A);
+      ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
+      $adminRow->link_scanner_div = "<input name='ls_regex_new' value='$regex' type='text'></input>";
+
+      // 3.1.4 manul url targets aka post_aff_url
+      $adminRow->manual_url_targets_div = "<textarea name='post_aff_url' type='text-area' >$redirector->url</textarea>";
+
+      // 3.1.5 linkscanner_td (different than link_scanner_div)
+      $sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$redirector->mn'";
+      $links = $this->wpdb->get_results($sql, ARRAY_A);
+      $linksText = "";
+
+      foreach ($links as $link) {
+        $linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
+        $linksText .= $linkText.'&#13;';
+      }
+
+      $countLink = count($links);
+      $adminRow->linkscanner_td = "<textarea name='linkscanner_links'>$linksText</textarea>"
+        . $countLink . " Posts";
+
+      //$adminRow->homepage_div = "<label>"
+      //. "Homepage %"
+      //<input name="rand_<qqqphp echo $i; QQQ>" type="text" id="rand_<qqqphp echo $i; QQQ>" value="<qqqphp echo $post_post->rand; QQQ>" size="3"/>
+      //. "<input name=\"rand_$i\" type=\"text\" id=\"rand_$i\" value=\"$n\"  size=\"3\"/>"
+      //. "</label>";
+      //. "</div>";      // homepage_div
+
+      $adminRow->mn_numbers_div = "<label>"
+        . "ID"
+        . "<input name='mn' type='text' value='$redirector->mn' size='3\'>"
+        . "</label>";
+
+      $adminRow->other_save_div = "<input name='save_redirector' class='c_button_link' type='submit' value='Save' />";
+
+      echo $adminRow->getHTML();
+    } // $redirectors as $redirector
+
+    // 3.2 Now emit a table row to contain the controls for a new redirector.
+    $adminRow = new AdminRow();
+    $adminRow->populated = false; // This is the unpopulated data-entry row
+
+    // 3.2.1 category slugs + post ids, aka single_pages_categories
+    $adminRow->cat_slug_ids_div = "<input name='single_pages_categories' type='text' >";
+
+    // 3.2.2 random referrers
+    //$adminRow->random_referrers_div = "<label for=\"random_post\">"
+    //. "<input name=\"random_post\" id=\"random_post\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
+    //. "Random Posts"
+    //. "</label>"
+    //. "<label for=\"random_page\">"
+    //. "<input id=\"random_page\" name=\"random_page\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
+    //. "Random Pages"
+    //. "</label>";
+    //echo "</div>"; // random_referrers_div
+
+    // 3.2.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
+    $adminRow->link_scanner_div = "<input type='text' name='ls_regex_new'>";
+
+    // 3.2.4 manul url targets aka post_aff_url
+    $adminRow->manual_url_targets_div = "<textarea name='post_aff_url' type='text'></textarea>";
+
+    // 3.2.5 linkscanner_td (different than link_scanner_div)
+    $newRedirectorMN = rand(10, 999); // new redirector mn number
+    $adminRow->linkscanner_td = "<input name='newRedirectorMN' type='hidden' value='$newRedirectorMN' />";
+
+    // 3.2.6 other_controls_td
+    //$r .= "<td>"; // 4. class="other_controls_td"
+    //$other_controls = "";
+    //$adminRow->other_controls_td = "<div>" // class="homepage_div"
+
+    // 3.2.6.1 homepage_div
+    //$adminRow->homepage_div = "<label>"
+    //. "Homepage %"
+    //. "<input type=\"text\" size=\"3\" value=\"0\" id=\"rand_1\" name=\"rand_1\">";
+    //. "</div>";  // homepage_div
+    //$r .= "</td>"; // other_controls_td
+    //echo $r;
+    //echo "</tr>";
+
+    // 3.2.6.2 save submit button
+    $adminRow->other_save_div = "<input name='save_redirector' class='c_button_link' type='submit' value='Save' />";
+
+    echo $adminRow->getHTML();
+    echo "</tbody>";
+    echo "</table>";
+  }
 
   // This method will save the contents of a particular IMBR admin screen row, such as a modified redirector
   // or a new one.  It will _not_ deal with the whitelist or mn parameters.
   private function redirector_save() {
 
-    // 1. First delete everything from imb_linkscanner because we're 
+    // 1. First delete everything from imb_linkscanner because we're
     //    going to rebuild it from scratch.
     //$this->wpdb->query("delete from ".$this->tableLinkscanners);
 
@@ -159,17 +561,17 @@ class imbanditRedirector {
 
       //$query = "update $this->tableRedirectors set url = '" . $_POST[$url] . "', random_post = '" . $rpost2 . "', random_page = '" . $rpage2 . "', single_pages_categories = '" . $_POST[$spc] . "', mn = '" . $_POST[$mn] . "', rand = '" . $_POST[$rand] . "' where id = '" . $_POST[$id] . "'";
       //$query = "update $this->tableRedirectors set url = '" . $_POST[$url]
-        //. "', random_post = '" . $rpost2 
-        //. "', random_page = '" . $rpage2 
+        //. "', random_post = '" . $rpost2
+        //. "', random_page = '" . $rpage2
         //. "', single_pages_categories = '" . $_POST[$spc]
-        //. "', mn = '" . $_POST[$mn] 
-        //. "', rand = '" . $_POST[$rand] 
+        //. "', mn = '" . $_POST[$mn]
+        //. "', rand = '" . $_POST[$rand]
         //. "' where id = '" . $_POST[$id] . "'";
       //$this->wpdb->query($query);
       //}
     //} // iterate over the existing redirectors
 
-    
+
     // 3. Now detect if a new redirector should be created.
     //    post_aff_url aka manual url targets.
     //if (isset($_POST['post_aff_url'])) {
@@ -196,7 +598,7 @@ class imbanditRedirector {
 
       // Only need $mn, not $mn_upd
       $mn = $_POST['newRedirectorMN'];
-
+xdebug_break();
       // If _any one_ of the following 5 variables are supplied then
       // write the new record to the redirector_table.
       if(
@@ -210,9 +612,9 @@ class imbanditRedirector {
         // single_pages_categories aka "category slubs + postIDs"
         //$query = "INSERT INTO $this->tableRedirectors set " .
           //"url = '" . $_POST['post_aff_url'] . " " .
-          //. "', single_pages_categories = '" . $_POST['single_pages_categories'] 
+          //. "', single_pages_categories = '" . $_POST['single_pages_categories']
           //. "', mn ='" . $mn
-          //. "', random_post = '" . $rand_post 
+          //. "', random_post = '" . $rand_post
           //. "', random_page = '" . $rand_page . "' ";
 
         $query = "insert into $this->tableRedirectors set " .
@@ -220,7 +622,7 @@ class imbanditRedirector {
           "random_page = -1, " .    // presently unused
           "url = '" . $_POST['post_aff_url'] . "', " .  // aka post_aff_url aka manual url targets
           "single_pages_categories = '" . $_POST['single_pages_categories'] . "', ". // this may be a comma delimited list
-          "mn = '$mn', " . 
+          "mn = '$mn', " .
           "rand = -1, " .           // presently unused
           "post_identifier = 'N/A'"; // presently unused
         $this->wpdb->query($query);
@@ -238,7 +640,7 @@ class imbanditRedirector {
     } //isset($_POST['post_aff_url']) // post_aff_url aka manual url targets
 
     // As with existing redirectors, new redirectors have the same 3 interesting boxes to deal with and
-    // imb_linkscanner will be updated or not according to the same criteria in sections 2.1 and 2.2. 
+    // imb_linkscanner will be updated or not according to the same criteria in sections 2.1 and 2.2.
 
     // 3.1. --------new linkscanner set to within a selection of categories----------------------------------------------------
     // single_pages_categories aka "category slubs + postIDs"
@@ -284,15 +686,15 @@ class imbanditRedirector {
 
         // Temporarily remove the looping
         $spcItem = $spc4OldRegex;
-        //$spcs = explode(',', $spc4OldRegex);
-        //foreach ($spcs as $spcItem) {
+        $spcs = explode(',', $spc4OldRegex);
+        foreach ($spcs as $spcItem) {
           // only send $postid _or_ $spc, never both
           if (is_numeric($spcItem))
             $this->linkscan($mn, $newRegex, $spcItem); // this is a postid
           else {
             $this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
           }
-        //}
+        }
       }
     }
 
@@ -300,7 +702,7 @@ class imbanditRedirector {
     // This is not relevant to any particular row and it's out of place here.
     // whitelist may be 'set' but '' also.  If that's the case then no changes to the db occur.
     // warning: this code does not check for set whitelist.  Should it ?
-    // This is not part of adding a new redirector record, the whitelist applies globally 
+    // This is not part of adding a new redirector record, the whitelist applies globally
     //$whiteListTable = $this->wpdb->prefix . 'imb_whiteList';
     //$refererRegexArray = explode("\n", $_POST['whiteList']);
     //$delWLSql = "delete from $this->tableWhitelists";
@@ -324,7 +726,7 @@ class imbanditRedirector {
 
   // This function will delete the imbr files from the db,
   // if present, and then recreate them.  This is suitable for
-  // "resetting" the db back to a beginning condition or for 
+  // "resetting" the db back to a beginning condition or for
   // originally initializing it as upon installtion.
   //
   // The original method used dbDelta
@@ -340,370 +742,13 @@ class imbanditRedirector {
     $this->resetWhitelists();
 
     // 2. Reset the url regex to the initial state
-    // $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
+    $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
     update_option('jsim_url_regex', $jsim_url_regex);
 
-    // 3. This is only useful for testing when we need to reset the 
+    // 3. This is only useful for testing when we need to reset the
     // posts to a known state.
     $this->eraseAllPosts();
 
-  }
-
-  // This function is the entry point for the functionality to display/manage/save
-  // the IMBR options settings page.  This settings page is fairly complicated
-  // so this function will call subfunctions that will generate the various elements
-  // of the HTML.
-  //
-  // Given an ordinary GET request, this function, as well as the
-  // related subfunctions, will display the existing contents of the IMBR options.
-  // However, if this function is called with a POST request then other functionality
-  // may be performed first, such as saving of changed options or resetting the db, before
-  // proceeding onto the ordinary display of the now updated information.
-  public function imb_red_editor() {
-
-    // 1. In the event this function has been called via a POST request,
-    // look for certain commands as POST parameters and execute them first,
-    // and then continue with the ordinary display of the admin screen.
-    // The if-else structure ensures that only one option will 
-    // run and only the first option that passes, even if
-    //other options might also pass.
-
-    // 1.1 Reset the database?
-    if (isset($_POST['redirector_databaseclear'])) {
-      $this->resetDatabase();
-
-    // 1.1 Delete a specific redirector
-    //if (isset($_POST['delete_redirector'])) {
-      //$query = "delete from $this->tableRedirectors where mn = '$_POST['delete_redirector']'";
-      //$redirector = $_POST['delete_redirector'];
-      //$query = "delete from $this->tableRedirectors where mn = '$redirector'";
-      //$this->wpdb->query($query);
-
-    // 1.2 Save the contents of a redirector record
-    } else if (isset($_POST['save_redirector'])) {
-      $this->redirector_save();
-    }
-
-    // 1. The entire IMBR admin page fits inside this div.
-    echo "<div class=\"wrap\">";
-    echo   $this->imb_red_editor_wrap_div_contents();
-    echo "</div>";
-  }
-
-  // The wrap_div wraps a 2nd, wrapper div.  Why?
-  private function imb_red_editor_wrap_div_contents() {
-    echo "<div style=\"clear:both\">";
-    echo   $this->imb_red_editor_2nd_wrap_div_contents();
-    echo "</div>";
-    echo "<div class=\"clear\"></div>";
-  }
-
-  // The 2nd_wrap_div essentially wraps a center tag.  Why?
-  private function imb_red_editor_2nd_wrap_div_contents() {
-    echo "<br>";
-    echo "<center>";
-    echo   $this->imb_red_editor_center_contents();
-    echo "</center>";
-  }
-
-  // All of the IMBR admin screen is inside this 3rd layer wrapper.
-  private function imb_red_editor_center_contents() {
-
-    // 1. Now display the IMBR logo and revision.
-    echo "<img src=\"../wp-content/plugins/imbr/imbr.png\"><br>$this->imbV<br><br><br><br>";
-
-    // 2. Emit the Instruction Box HTML
-    echo "<div id=\"instruction_box\">";
-
-    echo   "<div class=\"info_box\">";
-    echo     "<strong>A Route</strong> - Scans all Categories + individual PostIDs for any links containing /regex/. Randomly Chooses one /regex/ link to redirect to and uses the parent as the referrer.";
-    echo   "</div>";
-
-    echo   "<div class=\"info_box\">";
-    echo     "<strong>B Route</strong> - Randomly chooses  post from within the categories/postids to use as the referrer, and then randomly chooses a Manual URL to redirect to.";
-    echo   "</div>";
-
-    echo   "<div class=\"info_box\">";
-    echo     "<strong>C Route</strong> - Randomly selects referrers from ALL posts, ALL pages, or BOTH. And redirects to a random Manual URL.";
-    echo   "</div>";
-
-    //echo "<div></div>"; // class=\"clear\"
-    echo "</div>"; // instruction_box
-    echo "<br><br>";
-
-    // 3. The major part of the admin screen is displayed in a table.  This is the list of existing
-    // redirectors as well as an additional row to contain inputs for a new redirector.
-    // Emit that table now.
-    $this->imb_red_editor_table_contents();
-
-    // 4. redirector database clear button
-    echo "<div id=\"reset_database_div\">";
-    $page = $_GET['page'];
-    echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
-    echo "<input type=\"hidden\" name=\"redirector_databaseclear\" value=\"yes\" />";
-    echo "<input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
-    echo "</form>";
-    echo "</div>"; // reset_database_div
-  }
-
-  // The major part of the admin screen is displayed in a table.  This is the list of existing
-  // redirectors as well as an additional row to contain inputs for a new redirector.
-  // This function will emit that table.
-  private function imb_red_editor_table_contents() {
-
-    // 1. Start the table
-  	echo "<table id=\"redirectorTable\" class=\"widefat the_table\" style=\"width:1000px;\">";
-
-    // 2. Now output the column headers in the table header.
-    echo "<thead>";
-    echo   "<tr>";
-    echo     "<th>Custom Referrers</th>";
-    echo     "<th>&nbsp;</th>";
-    echo     "<th>Redirection URLs</th>";
-    echo     "<th>Link Scanner Found Targets</th>";
-    echo     "<th>Other Controls</th>";
-    echo   "</tr>";
-    echo "</thead>";
-
-    // 3. Now output the table body
-    echo "<tbody>";  // id=\"the-list\"
-
-    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $this->tableRedirectors";
-    $redirectors = $this->wpdb->get_results($redirectorsQuery);
-
-    $i = 1; // index of populated rows
-    $mns = ''; // the array of mn for the rows
-
-    // 3.1 Iterate over all the existing redirectors, if any
-    // and emit a table-row to display them.
-    foreach ($redirectors as $redirector) {
-
-      $adminRow = new AdminRow();
-
-      // Why do this? Why not just use $redirector->mn?
-      $mns[$i] = $redirector->mn;
-
-      $rpost = "";
-      if ($redirector->random_post == 1)
-      $rpost = 'checked="1"';
-
-      $rpage = "";
-      if ($redirector->random_page == 1)
-      $rpage = 'checked="1"';
-
-      // 3.1.1 single_pages_categories aka "category slugs + postIDs"
-      $adminRow->cat_slug_ids_div = "<input value=\"$redirector->single_pages_categories\" id=\"single_pages_categories_$i\" name=\"single_pages_categories_$i\" onkeyup=\"disableCheckboxes(this.value , $i);\">";
-
-      // 3.1.2 random referrers
-      // single_pages_categories aka "category slugs + postIDs"
-      // what is the relevance of that here? (look in the input tag)
-      //$adminRow->random_referrers_div ="<label for=\"random_post_$i\">"
-      //<input id="random_post_<qqqphp echo $i; QQQ>" name="random_post_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpost;QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ> onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
-      //. "<input id=\"random_post_$i\" name=\"random_post_$i\" type=\"checkbox\" $rpost >"
-      //. "Random Posts"
-      //. "</label>"
-      //. "<label for=\"random_page_$i\">"
-
-      //<input id="random_page_<qqqphp echo $i; QQQ>" name="random_page_<qqqphp echo $i; QQQ>" type="checkbox" <qqqphp echo $rpage; QQQ> <qqqphp echo $single_pages_categories != NULL ? ' disabled' : ''; QQQ>onchange="disableTextbox(<qqqphp echo $i; QQQ>);">
-      //. "<input id=\"random_page_$i\" name=\"random_page_$i\" type=\"checkbox\" $rpage >"
-      //. "Random Pages"
-      //. "</label>";
-
-      // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
-      // There can only be one regex associated with a given redirector.  Find that regex now.
-      $sql = "select * from $this->tableRegexes where mn = '$redirector->mn'";
-      $regexRow = $this->wpdb->get_results($sql,ARRAY_A);
-      ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
-      $adminRow->link_scanner_div = "<input name=\"ls_regex_new_$i\" id=\"ls_regex_new_$i\" value=\"$regex\" type=\"text\"></input>";
-
-      // 3.1.4 manul url targets aka post_aff_url
-      $adminRow->manual_url_targets_div = "<textarea name='post_aff_url_$i' type='text-area' id='post_aff_url$i' >$redirector->url</textarea>";
-
-      // 3.1.5 linkscanner_td (different than link_scanner_div)
-      $sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$redirector->mn'";
-      $links = $this->wpdb->get_results($sql, ARRAY_A);
-      $linksText = "";
-
-      foreach ($links as $link) {
-        $linkText = (strlen($link['link']) >= 38) ? substr($link['link'], 0, 38)  : $link['link'];
-        $linksText .= $linkText.'&#13;';
-      }
-
-      $countLink = count($links);
-      $adminRow->linkscanner_td = "<textarea id=\"linkscanner_links_$i\">$linksText</textarea>"
-        . $countLink . " Posts";
-
-      //$adminRow->homepage_div = "<label>"
-      //. "Homepage %"
-      //<input name="rand_<qqqphp echo $i; QQQ>" type="text" id="rand_<qqqphp echo $i; QQQ>" value="<qqqphp echo $post_post->rand; QQQ>" size="3"/>
-      //. "<input name=\"rand_$i\" type=\"text\" id=\"rand_$i\" value=\"$n\"  size=\"3\"/>"
-      //. "</label>";
-      //. "</div>";      // homepage_div
-
-      $adminRow->mn_numbers_div = "<label>"
-        . "ID"
-        . "<input name='mn_$i' type='text' id='mn_$i' value='$mns[$i]' size='3\'>"
-        . "</label>";
-
-      $adminRow->other_save_div = "<input name='save_redirector_$i' class='c_button_link' type='submit' value='Save' />";
-
-      echo $adminRow->getHTML();
-
-    } // $redirectors as $redirector
-
-    // 3.2 Now emit a table row to contain the controls for a new redirector.
-    $adminRow = new AdminRow();
-    $adminRow->populated = false; // This is the unpopulated data-entry row
-
-    // 3.2.1 category slugs + post ids, aka single_pages_categories
-    //$adminRow->cat_slug_ids_div = "<input name=\"single_pages_categories\" id=\"single_pages_categories\" type=\"text\" onkeyup=\"disableCheckboxesNew(this.value)\">";
-    $adminRow->cat_slug_ids_div = "<input name=\"single_pages_categories\" id=\"single_pages_categories\" type=\"text\" >";
-
-    // 3.2.2 random referrers
-    //$adminRow->random_referrers_div = "<label for=\"random_post\">"
-    //. "<input name=\"random_post\" id=\"random_post\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
-    //. "Random Posts"
-    //. "</label>"
-    //. "<label for=\"random_page\">"
-    //. "<input id=\"random_page\" name=\"random_page\" type=\"checkbox\" onchange=\"disableTextboxNew()\">"
-    //. "Random Pages"
-    //. "</label>";
-    //echo "</div>"; // random_referrers_div
-
-    // 3.2.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
-    $adminRow->link_scanner_div = "<input type=\"text\" id=\"ls_regex_new\" name=\"ls_regex_new\">";
-
-    // 3.2.4 manul url targets aka post_aff_url
-    $adminRow->manual_url_targets_div = "<textarea name='post_aff_url' type='text' id='post_aff_url'></textarea>";
-
-    // 3.2.5 linkscanner_td (different than link_scanner_div)
-    $newRedirectorMN = rand(10, 999); // new redirector mn number
-    $adminRow->linkscanner_td = "<input name=\"newRedirectorMN\" type=\"hidden\" id=\"newRedirectorMN\" value=\"$newRedirectorMN\" />";
-
-    // 3.2.6 other_controls_td
-    //$r .= "<td>"; // 4. class="other_controls_td"
-    //$other_controls = "";
-    //$adminRow->other_controls_td = "<div>" // class="homepage_div"
-
-    // 3.2.6.1 homepage_div
-    //$adminRow->homepage_div = "<label>"
-    //. "Homepage %"
-    //. "<input type=\"text\" size=\"3\" value=\"0\" id=\"rand_1\" name=\"rand_1\">";
-    //. "</div>";  // homepage_div
-    //$r .= "</td>"; // other_controls_td
-    //echo $r;
-    //echo "</tr>";
-
-    // 3.2.6.2 save submit button
-    $adminRow->other_save_div = "<input name=\"save_redirector\" class=\"c_button_link\" type=\"submit\" value=\"Save\" />";
-
-    echo $adminRow->getHTML();
-    echo "</tbody>";
-    echo "</table>";
-  }
-
-  // Because we have hooked the publish_post action, this function will be 
-  // called whenever a new post is published.
-  public function handleNewPost($post_id) {
-    $sql = "SELECT * FROM $this->tableRegexes"; // who cares about the order?
-    $regexes = $this->wpdb->get_results($sql, ARRAY_A);
-    foreach ($regexes as $regex)
-      $this->linkscan($regex['mn'], $regex['regex'], $post_id);
-  }
-
-  // Because we have hooked the admin_menu action, this code will be called at that time.
-  // This function will add the IMBR choice to the Settings menu.  Doing so involves
-  // specifiying another function to be called when the choice is selected.
-  public function addIMBROptionToAdminScreen() {
-    add_options_page('IMBR', 'IMBR', 'manage_options', __FILE__, array(&$this, 'imb_red_editor'));
-  }
-
-  // called because of register_activation_hook
-  private function prc_plugin_install() {
-    $i = 5/0;
-    //include("phpclient.php");
-    //$server_url = "http://imbandit.com/app/server/licenseserver.php";
-    //$license_array = processLicense($server_url);
-    //if ($license_array[6] != 'active')
-    //die('Product not properly licensed. Please obtain a legal license from <a href="http://imbandit.com">Imbandit Website</a>');
-    //run imbandit init
-    //$this->imb_init();
-    //run linkscanner init
-    //$this->ls_init();
-    //run whiteList init
-    //$this->wl_init();
-    //move controls.js
-    ///* $f1 = $this->im_get_wp_root()."wp-content/plugins/imbr/controls.js";
-    //$f1contents = file_get_contents($f1);
-    //file_put_contents($this->im_get_wp_root()."wp-includes/js/controls.js",$f1contents); */
-  }
-
-  // called because of add_action(wp_head...
-  // What does this do?
-  //public function wp_add_red($unused) {
-    //echo "<qqqphp if (private function_exists('wp_jdis()()')) if (wp_jdis()()) exit(); QQQ>";
-  //}
-
-  //private function getOptions() {
-    //Don't forget to set up the default options
-    //if (!$options = get_option('imbandit')) {
-    //$options = array('default' => 'options');
-    //update_option('imbandit', $options);
-    //}
-    //unset($options['apiKey']); update_option('imbandit', $options);exit;
-    //return $options;
-  //}
-
-  //private function checkApiKey() {
-    //$options = $this->getOptions();
-    //if (!isset($options['apiKey'])) {
-    //return FALSE;
-    //}
-    //$key = md5(md5($_SERVER['SERVER_NAME'] . 'laDonnaEMobile'));
-    //if ($options['apiKey'] != $key) {
-    //return FALSE;
-    //return TRUE;
-    //}
-    //return TRUE;
-  //}
-
-  //private function getApiKey() {
-    //$content = 'Please enter the paypal email address used to purchase your license:
-    //<p><form action="options-general.php?page=' . $_GET['page'] . '" method="post">
-    //<table><tr><td>Paypal Email:</td><td><input type="text" name="paypalemail"></td><td colspan="2" align="left"><input type="submit" name="submit1" value="Activate"></td></tr>
-    //</table>
-    //<input type="hidden" name="apiKeyRequest" value="1">
-    //</form></p>';
-    //return $content;
-  //}
-
-  //private function requestApiKey($email) {
-    //$key = file_get_contents('http://imbandit.com/app/store/apiKeyServer.php?email=' . $email . '&server=' . $_SERVER['SERVER_NAME']);
-    //$options = $this->getOptions();
-    //$options['apiKey'] = $key;
-    //update_option('imbandit', $options);
-    //$myKey = md5(md5($_SERVER['SERVER_NAME'] . 'laDonnaEMobile'));
-    //if ($key == $myKey)
-    //echo 'API Key set successfully.';
-    //else
-    //echo 'Unauthorized';
-  //}
-
-
-  // This is nice to know, but who cares?
-  private function im_get_wp_root() {
-    $base = dirname(__FILE__);
-    $path = false;
-    if (@file_exists(dirname(dirname($base)) . "/wp-config.php")) {
-      $path = dirname(dirname($base)) . "/";
-    } else if (@file_exists(dirname(dirname(dirname($base))) . "/wp-config.php")) {
-      $path = dirname(dirname(dirname($base))) . "/";
-    } else
-      $path = false;
-    if ($path != false) {
-      $path = str_replace("\\", "/", $path);
-    }
-    return $path;
   }
 
   // Drop the imb_linkscanner table, if it exists, and then
@@ -726,6 +771,31 @@ class imbanditRedirector {
       regex varchar(255),
       PRIMARY KEY  (id)
     );";
+    $this->wpdb->query($sql);
+  }
+  // Drop the imb_redirector table, if it exists, and then
+  // recreate it.
+
+  private function resetRedirectors() {
+
+    $tableExists = $this->imb_tableExists($this->tableRedirectors);
+    if ($tableExists) {
+      $sql = "DROP TABLE `$this->tableRedirectors`";
+      $this->wpdb->query($sql);
+    }
+
+    // single_pages_categories aka "category slubs + postIDs"
+    $sql = "CREATE TABLE `" . $this->tableRedirectors . "` (
+      `id` int( 11 ) NOT NULL AUTO_INCREMENT ,
+      `random_post` bool,
+      `random_page` bool,
+      `url` longtext,
+      `single_pages_categories` longtext,
+      `mn` int( 11 ) NOT NULL ,
+      `rand` int( 11 ) NOT NULL ,
+      `post_identifier` longtext,
+      PRIMARY KEY ( `id` )
+      ) AUTO_INCREMENT =1 DEFAULT CHARSET = cp1251";
     $this->wpdb->query($sql);
   }
 
@@ -768,178 +838,11 @@ class imbanditRedirector {
     $this->wpdb->query($sql);
   }
 
-  // This function will iterate over all the posts and then
-  // use the WP API to individually delete them.
-  private function eraseAllPosts() {
+////////////////////////
 
-    $sql = "SELECT * FROM " . $this->tablePosts;
-    $posts = $this->wpdb->get_results($sql, ARRAY_A);
-    foreach ($posts as $post) {
-      $postid = $post['ID'];
-      wp_delete_post($postid, true /* delete, no trashcan */);
-    }
 
-    // Now reset the autoincrement postid to 1.  This will
-    // help Selenium keep track of the postids for it's purposes.
-    $sql = "alter table $this->tablePosts auto_increment = 1";
-    $this->wpdb->get_results($sql);
-  }
 
-  // Drop the imb_redirector table, if it exists, and then
-  // recreate it.
-  private function resetRedirectors() {
 
-    $tableExists = $this->imb_tableExists($this->tableRedirectors);
-    if ($tableExists) {
-      $sql = "DROP TABLE `$this->tableRedirectors`";
-      $this->wpdb->query($sql);
-    }
-
-    // single_pages_categories aka "category slubs + postIDs"
-    $sql = "CREATE TABLE `" . $this->tableRedirectors . "` (
-      `id` int( 11 ) NOT NULL AUTO_INCREMENT ,
-      `random_post` bool,
-      `random_page` bool,
-      `url` longtext,
-      `single_pages_categories` longtext,
-      `mn` int( 11 ) NOT NULL ,
-      `rand` int( 11 ) NOT NULL ,
-      `post_identifier` longtext,
-      PRIMARY KEY ( `id` )
-      ) AUTO_INCREMENT =1 DEFAULT CHARSET = cp1251";
-    $this->wpdb->query($sql);
-  }
-
-  //
-  // This function implements the redirection, if any is desired for a particular page view.
-  // Redirection is requested by passing the parameter "mn=x" where x is some valid redirector record.
-  //
-  // Any call to an ordinary page or post (not the admin section) will result in this code
-  // getting called.  The first step is to weed out calls that don't want redirection.
-  //
-  // There are two phases for a given redirection request and for each phase this function will be called.
-  // We use a POST parameter "redirectionPhase" (formerly "level") to communicate which phase of 
-  // the process is happening.
-  //
-  // In phase 1, we determine which onsite post should receive the initial redirection and 
-  // which offsite URL should receive the final redirect.  Then we redirect to the onsite post, via
-  // a POST request, passing the offsite URL as a POST parameter.
-  // Said request will result in this function getting executed again for phase 2.
-  //
-  // In phase 2, we simply redirect again, this time to the given offsite page, via a GET.
-  //
-  // The purpose of the return value is unknown to this author.
-  public function doRedirection() {
-
-    // 1. Look for useful parameters in the POST
-
-    // 1.1 Determine redirectionPhase
-    $redirectionPhase = "";
-    if (isset($_POST['redirectionPhase']))
-      $redirectionPhase = $_POST['redirectionPhase'];
-
-    // 1.2 Determine mn.  mn only comes from the initial GET request, not from any subsequent POST requests.
-    $mn = ""; // nada
-    if (isset($_GET['mn']))
-    	$mn = $_GET['mn'];
-
-    // 2. Weed out requests that do not want redirection
-
-    // 2.1 Ignore archives
-    if (is_archive()) return; // false;
-
-    // 2.2 If no $mn and no $redirectionPhase then this request is a normal page view.  
-    // Just return a get out of the way
-    if ($redirectionPhase == "")
-      if ($mn == "")
-        return;
-      else
-        $redirectionPhase = "1"; // this is the start of phase 1
-
-    // 3. Now process a particular $redirectionPhase
-    switch($redirectionPhase) {
-      case "1":
-        $this->doRedirection_Phase1($mn);
-        break;
-      case "2":
-        $this->doRedirection_Phase2($mn);
-        break;
-      default:
-        $i = 5/0; // shouldn't happen
-    }
-      $i = 5/0; // control never gets here?
-  }
-
-  // This function will implement phase 1 of the redirection, which is the 
-  // bulk of the work for the entire process.  In phase 1 we will determine everything
-  // necessary to complete the redirection, such as which post to initially bounce to and
-  // which off-site target to ultimately redirect to.  At the end of this method, we will 
-  // redirect to the appropriate post sending the minimal amount of info required
-  // to redirect again to the final destination.
-  //
-  // Don't know what the return value does.
-  private function doRedirection_Phase1($mn) {
-
-    // 1. Get the redirector record
-    $sql = "select * from $this->tableRedirectors where mn='$mn'";
-    $redirector = $this->wpdb->get_row($sql);
-
-    // 2. Find one random linkscanner link that matches this mn, if any.
-    $sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
-    $linkscanner_row = $this->wpdb->get_row($sql);
-
-    // 3. Now determine the onsite redirection post and ultimate offsite target.
-    if ($linkscanner_row) {
-      // 3.1. Because this redirector has at least one associated linkscanner, treat
-      // this redirection as route A.
-      $ls_postid = $linkscanner_row->postid;
-      $hopLink = get_permalink($ls_postid);
-    } else if ($redirector->url != "") {
-      // 3.2. Because this redirector has no linkscanner links, but does
-      // have manual urls, treat this redirection as route B.
-
-      // 3.2.1. First find a random relevant post associated with the spc
-      $relevantPosts = $this->findAllRelevantPosts($redirector->single_pages_categories);
-      $randomPostIdx = array_rand($relevantPosts);
-
-      // 3.2.2. Next find a random manual target.  Assume the manual target
-      // field may be a \n delimited list of urls.
-      $manual_urls = explode( "\n" , $redirector->url);
-      $manual_urlIdx = array_rand($manual_urls);
-
-      $hopLink = get_permalink($relevantPosts[$randomPostIdx]['ID']);
-    }
-
-    // Now create a form and then submit it.  This causes a post to the onsite redirection page.
-    echo "<html>";
-    echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
-    echo   "<body>";
-    echo     "<form action='$hopLink' method='post' id='form1'>";
-    echo        "<input type='hidden' name='offsiteURL' value='$manual_urls[$manual_urlIdx]' />";
-    echo        "<input type='hidden' name='redirectionPhase' value='2' />";
-    echo      "</form>";
-    echo     "<script language='JavaScript'>document.getElementById('form1').submit();</script>";
-    echo   "</body>";
-    echo "</html>";
-
-  }
-
-  // This function will implement phase 2 of the redirection.  It will receive
-  // an off-site URL (as a POST param) and redirect there.
-  // Don't know what the return value does.
-  private function doRedirection_Phase2($mn) {
-
-    //Create Form
-    echo "<html>";
-    echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
-    echo   "<body>";
-    $offsiteURL = $_POST['offsiteURL'];
-    echo     "<form action='$offsiteURL' method='get' id='form1'>";
-    echo     "</form>";
-    echo     "<script language='JavaScript'>document.getElementById('form1').submit();</script>";
-    echo   "</body>";
-    echo "</html>";
-  }
 
   // This function will take a comma delimted list of
   // any number of categories and post ID ($spc), mixed in any order, and return an array
@@ -972,7 +875,7 @@ class imbanditRedirector {
     //    This is will build $postStr which is the single difference between the two possible
     //    sql queries on the posts table, for subsequent execution.
     if ($spc) {
-      // 1.1 If $spc is sent, then search for all posts tagged with this category 
+      // 1.1 If $spc is sent, then search for all posts tagged with this category
       // and ignore $postid, even if present
 
       // The information can be found using a 3 level join.  The old edition did not do this
@@ -1066,6 +969,100 @@ class imbanditRedirector {
   }
 
 }
+
+  // called because of add_action(init...
+  // we enqueue this same file in enqueIMBR_CSS.  Why do it in two places?
+  //public function enqueueBackendFiles() {
+    //wp_enqueue_script("controls.js", "/wp-includes/js/controls.js", array(), "0.0.1", true);
+  //}
+
+  // called because of register_activation_hook
+  //private function prc_plugin_install() {
+  //$i = 5/0;
+  //$i = 5/0;
+  //exit();
+  //include("phpclient.php");
+  //$server_url = "http://imbandit.com/app/server/licenseserver.php";
+  //$license_array = processLicense($server_url);
+  //if ($license_array[6] != 'active')
+  //die('Product not properly licensed. Please obtain a legal license from <a href="http://imbandit.com">Imbandit Website</a>');
+  //run imbandit init
+  //$this->imb_init();
+  //run linkscanner init
+  //$this->ls_init();
+  //run whiteList init
+  //$this->wl_init();
+  //move controls.js
+  ///* $f1 = $this->im_get_wp_root()."wp-content/plugins/imbr/controls.js";
+  //$f1contents = file_get_contents($f1);
+  //file_put_contents($this->im_get_wp_root()."wp-includes/js/controls.js",$f1contents); */
+  //}
+
+  // called because of add_action(wp_head...
+  // What does this do?
+  //public function wp_add_red($unused) {
+  //echo "<qqqphp if (private function_exists('wp_jdis()()')) if (wp_jdis()()) exit(); QQQ>";
+  //}
+
+  //private function getOptions() {
+  //Don't forget to set up the default options
+  //if (!$options = get_option('imbandit')) {
+  //$options = array('default' => 'options');
+  //update_option('imbandit', $options);
+  //}
+  //unset($options['apiKey']); update_option('imbandit', $options);exit;
+  //return $options;
+  //}
+
+  //private function checkApiKey() {
+  //$options = $this->getOptions();
+  //if (!isset($options['apiKey'])) {
+  //return FALSE;
+  //}
+  //$key = md5(md5($_SERVER['SERVER_NAME'] . 'laDonnaEMobile'));
+  //if ($options['apiKey'] != $key) {
+  //return FALSE;
+  //return TRUE;
+  //}
+  //return TRUE;
+  //}
+
+  //private function getApiKey() {
+  //$content = 'Please enter the paypal email address used to purchase your license:
+  //<p><form action="options-general.php?page=' . $_GET['page'] . '" method="post">
+  //<table><tr><td>Paypal Email:</td><td><input type="text" name="paypalemail"></td><td colspan="2" align="left"><input type="submit" name="submit1" value="Activate"></td></tr>
+  //</table>
+  //<input type="hidden" name="apiKeyRequest" value="1">
+  //</form></p>';
+  //return $content;
+  //}
+
+  //private function requestApiKey($email) {
+  //$key = file_get_contents('http://imbandit.com/app/store/apiKeyServer.php?email=' . $email . '&server=' . $_SERVER['SERVER_NAME']);
+  //$options = $this->getOptions();
+  //$options['apiKey'] = $key;
+  //update_option('imbandit', $options);
+  //$myKey = md5(md5($_SERVER['SERVER_NAME'] . 'laDonnaEMobile'));
+  //if ($key == $myKey)
+  //echo 'API Key set successfully.';
+  //else
+  //echo 'Unauthorized';
+  //}
+  // This is nice to know, but who cares?
+  //private function im_get_wp_root() {
+  //$base = dirname(__FILE__);
+  //$path = false;
+  //if (@file_exists(dirname(dirname($base)) . "/wp-config.php")) {
+  //$path = dirname(dirname($base)) . "/";
+  //} else if (@file_exists(dirname(dirname(dirname($base))) . "/wp-config.php")) {
+  //$path = dirname(dirname(dirname($base))) . "/";
+  //} else
+  //$path = false;
+  //if ($path != false) {
+  //$path = str_replace("\\", "/", $path);
+  //}
+  //return $path;
+  //}
 
 global $wpdb;
 $imbanditInstance = new imbanditRedirector($wpdb);

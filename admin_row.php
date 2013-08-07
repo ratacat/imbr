@@ -10,28 +10,25 @@
 
 class AdminRow {
 
-  //1. public $custom_ref_td      = "custom_ref_td";
-  public $cat_slug_ids_div        = "cat_slug_ids_div";
-  //public $random_referrers_div    = "random_referrers_div";
-
-  // 2. public $redirection_td    = "redirection_td";
-  public $link_scanner_div        = "link_scanner_div";
-  public $manual_url_targets_div  = "manual_url_targets_div";
-
-  // 3.
-  public $linkscanner_td          = "linkscanner_td";
-
-  // 4. public $other_controls_td = "other_controls_td";
-  //public $homepage_div            = "homepage_div";
-  public $mn_numbers_div          = "mn_numbers_div";
-  //public $other_url_div           = "other_url_div";
-  //public $other_delete_div        = "other_delete_div";
-  public $other_save_div          = "other_save_div";
-
   // An ordinary row that comes from the db is "populated."  The similar row
-  // used to enter a new row is not populated.  There are slight differences 
+  // used to enter a new row is not populated.  There are slight differences
   // between the HTML for these types, hence this flag.
   public $populated = true;
+	
+  // Every tr will have an id=NNN for populated rows or id= for the new 
+  // redirector entry row.
+  public $mn = "";
+
+  public $cat_slug_ids_div        = "cat_slug_ids_div";
+  //public $homepage_div            = "homepage_div";
+  public $link_scanner_div        = "link_scanner_div";
+  public $manual_url_targets_div  = "manual_url_targets_div";
+  public $mn_numbers_div          = "mn_numbers_div";
+  //public $other_delete_div        = "other_delete_div";
+  //public $other_url_div           = "other_url_div";
+  public $other_save_div          = "other_save_div";
+  //public $random_referrers_div    = "random_referrers_div";
+
 
   // This method will return the HTML required to implement a given table row.
   // The contents of each row are wrapped in a form in order to make form handling
@@ -40,8 +37,8 @@ class AdminRow {
 
     $page = $_GET['page'];
  
-    $r  = "<tr>";
-    if ( !$this->populated) $r =  "<tr id='newRedirector'>";
+    $r  = "<tr id='$mn'>";
+
     $r .=   "<form action='options-general.php?page=$page' method='post'>";
     $r .=     $this->getHTMLFormContents();
     $r .=   "</form>";
