@@ -458,7 +458,7 @@ class imbanditRedirector {
 
     // 3.2.5 linkscanner_td (different than link_scanner_div)
     $newRedirectorMN = rand(10, 999); // new redirector mn number
-    $adminRow->linkscanner_td = "<input name='newRedirectorMN' type='hidden' value='$newRedirectorMN' />";
+    $adminRow->linkscanner_td = "<input name='mn' type='hidden' value='$newRedirectorMN' />";
 
     // 3.2.6 other_controls_td
     //$r .= "<td>"; // 4. class="other_controls_td"
@@ -484,243 +484,60 @@ class imbanditRedirector {
 
   // This method will save the contents of a particular IMBR admin screen row, such as a modified redirector
   // or a new one.  It will _not_ deal with the whitelist or mn parameters.
+  //
+  // Each row on the redirector table, including the new row form, is wrapped in a form and has its
+  // own submit button.  When that button is pressed, the post params will have all the information 
+  // need to update an existing record or to create a new one.  The key to success here is the "mn" number
+  // that is passed.  Any imbr data with this given number, if any, will be removed and recreated.
+  // Hence existing records get updated and new records get added.
   private function redirector_save() {
 
-    // 1. First delete everything from imb_linkscanner because we're
-    //    going to rebuild it from scratch.
-    //$this->wpdb->query("delete from ".$this->tableLinkscanners);
+    // 1. Extract the POST values of interest.
+    $manual_targets = $_POST['post_aff_url'];
+    $mn             = $_POST['mn'];
+    $rand_post      = (isset($_POST['random_post'])) ? 1 : 0;
+    $rand_page      = (isset($_POST['random_page'])) ? 1 : 0;
+    $regex          = $_POST['ls_regex_new'];
+    $spc            = $_POST['single_pages_categories'];
 
-    // 2. Deal with the existing redirectors.
+    // 2. Delete all traces of any imbr record that is associated with the given mn
 
-    // For each redirector, there are 3 interesting fields to deal with...
-    // A. category slugs + postIDs aka single_pages_categories
-    // B. linkscanner urls            aka ls_regex_new
-    // C. manual url targets          aka post_aff_url
-    // The following sections will leap to life and update the imb_linkscanner table given some combination of these fields
+    // 2.1. Delete anything in imb_redirector associated with the given mn
+    $this->wpdb->query("delete from $this->tableRedirectors where mn='$mn'");
 
-    // The number of existing redirectors
-    //$redirectorCnt = $_POST['redirectorCnt'];
+    // 2.2. Delete anything in imb_regex associated with the given mn
+    $this->wpdb->query("delete from $this->tableRegexes where mn='$mn'");
 
-    // 2.1 Iterate over every existing redirector
-    //for ($i = 1; $i <= $redirectorCnt; $i++) {
+    // 2.3. Delete anything in imb_linkscanner associated with the given mn
+    $this->wpdb->query("delete from $this->tableLinkscanners where mn='$mn'");
 
-      // 2.1.1 Determine the indexed POST parameter names
-      //$url = "post_aff_url_" . $i;              // aka manual url targets
-      //$rpost = "random_post_" . $i;
-      //$rpage = "random_page_" . $i;
-      //$spc = "single_pages_categories_" . $i;   // aka "category slubs + postIDs"
-      //$mn = "mn_" . $i;
-      //$id = "id_" . $i;
-      //$rand = "rand_" . $i;
-      //$select = "select_" . $i;
-      //$ls_regex_new = "ls_regex_new_" . $i;     // aka linkscanner urls
+    // 3. Now insert the relevant records
 
-      // 2.1.2 Update linkscanner set to within a selection of categories
-      // Only trigger if category slugs + post ids has a value, and the other two fields do not.
-      //if ( $_POST[$ls_regex_new] == '' && $_POST[$spc] != '' && $_POST[$url] == '') {
-        //$spcs = explode(',', $_POST[$spc]);
-        //foreach ($spcs as $spcItem) {
-          // only send $postid _or_ $spc, never both
-          //$this->linkscan($_POST[$mn], NULL, NULL,$spcItem);
-        //}
-      //}
+    // 3.1. Insert into imb_redirector
+    $query = "insert into $this->tableRedirectors set " .
+      "random_post = -1, " .    // presently unused
+      "random_page = -1, " .    // presently unused
+      "url = '" . $_POST['post_aff_url'] . "', " .  // aka post_aff_url aka manual url targets
+      "single_pages_categories = '" . $_POST['single_pages_categories'] . "', ". // this may be a comma delimited list
+      "mn = '$mn', " .
+      "rand = -1, " .           // presently unused
+      "post_identifier = 'N/A'"; // presently unused
+    $this->wpdb->query($query);
 
-      // 2.1.3 --------New LS Regexs----------------------------------------------------
-      //$regexTable = $this->wpdb->prefix . 'imb_regex';
-      // ls_regex_new aka linkscanner urls
-      // Only trigger if linkscanner URLs has a value, regardless of the values of the other two fields
-      //$regexArray = explode("\n", $_POST[$ls_regex_new]);
-      //foreach ($regexArray as $newRegex) {
-        //$newRegex = trim($newRegex);
-        //if ($newRegex == NULL)
-          //continue;
+    // 3.2. Insert into imb_regex
+    $query = "INSERT INTO $this->tableRegexes (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
+    $this->wpdb->query($query);
 
-        //$encoded = base64_encode($newRegex);
-        //$sql = "INSERT INTO " . $regexTable . " (regex, mn) VALUES ('$encoded','$_POST[$mn]') on DUPLICATE KEY UPDATE regex='$encoded'";
-        //$this->wpdb->query($sql);
-        //$spcs = explode(',', $_POST[$spc]);
-        //foreach ($spcs as $spcItem) {
-          // only send $postid _or_ $spc, never both
-          //$this->linkscan($_POST[$mn], $newRegex, NULL,$spcItem);
-        //}
-      //}
-
-      // 2.1.4 Now update the redirector record with whatever POST parameters have been sent.
-
-      //set variables for easily reading checkboxes
-      //if (isset($_POST[$rpost])) {
-      //$rpost2 = 1;
-      //} else {
-      //$rpost2 = 0;
-      //}
-      //if (isset($_POST[$rpage])) {
-      //$rpage2 = 1;
-      //} else {
-      //$rpage2 = 0;
-      //}
-
-      //$query = "update $this->tableRedirectors set url = '" . $_POST[$url] . "', random_post = '" . $rpost2 . "', random_page = '" . $rpage2 . "', single_pages_categories = '" . $_POST[$spc] . "', mn = '" . $_POST[$mn] . "', rand = '" . $_POST[$rand] . "' where id = '" . $_POST[$id] . "'";
-      //$query = "update $this->tableRedirectors set url = '" . $_POST[$url]
-        //. "', random_post = '" . $rpost2
-        //. "', random_page = '" . $rpage2
-        //. "', single_pages_categories = '" . $_POST[$spc]
-        //. "', mn = '" . $_POST[$mn]
-        //. "', rand = '" . $_POST[$rand]
-        //. "' where id = '" . $_POST[$id] . "'";
-      //$this->wpdb->query($query);
-      //}
-    //} // iterate over the existing redirectors
-
-
-    // 3. Now detect if a new redirector should be created.
-    //    post_aff_url aka manual url targets.
-    //if (isset($_POST['post_aff_url'])) {
-    if (isset($_POST['save_redirector'])) {
-
-      // Assuming so, clean up the other parameters
-
-      // single_pages_categories aka "category slubs + postIDs"
-      if (!isset($_POST['single_pages_categories']))
-        $_POST['single_pages_categories'] = NULL;
-
-      if (!isset($_POST['post_aff_url']))
-        $_POST['post_aff_url'] = NULL;
-
-      if (isset($_POST['random_post']))
-        $rand_post = 1;
-      else
-        $rand_post = 0;
-
-      if (isset($_POST['random_page']))
-        $rand_page = 1;
-      else
-        $rand_page = 0;
-
-      // Only need $mn, not $mn_upd
-      $mn = $_POST['newRedirectorMN'];
-xdebug_break();
-      // If _any one_ of the following 5 variables are supplied then
-      // write the new record to the redirector_table.
-      if(
-        $_POST['post_aff_url'] != '' ||             // aka manual url targets
-        $_POST['single_pages_categories'] != '' ||  // aka "category slubs + postIDs"
-        $_POST['ls_regex_new'] != '' ||             // aka linkscanner urls
-        $rand_post != '0'||
-        $rand_page != '0'){
-
-        // post_aff_url aka manual url targets
-        // single_pages_categories aka "category slubs + postIDs"
-        //$query = "INSERT INTO $this->tableRedirectors set " .
-          //"url = '" . $_POST['post_aff_url'] . " " .
-          //. "', single_pages_categories = '" . $_POST['single_pages_categories']
-          //. "', mn ='" . $mn
-          //. "', random_post = '" . $rand_post
-          //. "', random_page = '" . $rand_page . "' ";
-
-        $query = "insert into $this->tableRedirectors set " .
-          "random_post = -1, " .    // presently unused
-          "random_page = -1, " .    // presently unused
-          "url = '" . $_POST['post_aff_url'] . "', " .  // aka post_aff_url aka manual url targets
-          "single_pages_categories = '" . $_POST['single_pages_categories'] . "', ". // this may be a comma delimited list
-          "mn = '$mn', " .
-          "rand = -1, " .           // presently unused
-          "post_identifier = 'N/A'"; // presently unused
-        $this->wpdb->query($query);
-      }
-
-      // This is the mn for the new redirector.  Why a 2nd variable name?  Reuse $mn instead.
-      //$mn4LS = $_POST['newRedirectorMN'];
-
-      // post_aff_url aka manual url targets
-      // single_pages_categories aka "category slubs + postIDs"
-      //$_POST['post_aff_url'] = false;
-      //$_POST['single_pages_categories'] = false;
-      //$_POST['newRedirectorMN'] = false;
-      //exit(var_dump($this->wpdb->last_query));
-    } //isset($_POST['post_aff_url']) // post_aff_url aka manual url targets
-
-    // As with existing redirectors, new redirectors have the same 3 interesting boxes to deal with and
-    // imb_linkscanner will be updated or not according to the same criteria in sections 2.1 and 2.2.
-
-    // 3.1. --------new linkscanner set to within a selection of categories----------------------------------------------------
-    // single_pages_categories aka "category slubs + postIDs"
-    // This only applies to new redirectors
-    $spc4OldRegex = $_POST['single_pages_categories'];
-    // post_aff_url aka manual url targets
-    // ls_regex_new aka linkscanner urls
-    // Only trigger if category slugs + post ids has a value, and the other two do not.
-    if ($_POST['ls_regex_new'] == '' && $spc4OldRegex != '' && $_POST['post_aff_url'] == '') {
-      $i = 5/0;
-      //$spcs = explode(',', $spc4OldRegex);
-      //foreach ($spcs as $spcItem) {
-        // only send $postid _or_ $spc, never both
-        //$this->linkscan($mn4LS, NULL, NULL,$spcItem);
-      //}
-    }
-
-    // 3.2. --------OLD LS Regexs----------------------------------------------------
-    // This only applies to new redirectors
-    // ls_regex_new may be 'set' but '' also.  If that's the case then no changes to the db occur.
-    // Is this part of adding a new record?
-    // ls_regex_new aka linkscanner urls
-    // Only trigger if linkscanner URLs has a value, regardless of the values of the other two fields
-    if (isset($_POST['ls_regex_new'])) {
-      //$regexTable = $this->wpdb->prefix . 'imb_regex';
-      $regexArray = explode("\n", $_POST['ls_regex_new']);
-      foreach ($regexArray as $newRegex) {
-        $newRegex = trim($newRegex);
-        if ($newRegex == NULL)
-          continue;
-
-        // don't need to do this
-        // base64_encoded version of the newRegex
-        //$encoded = base64_encode($newRegex);
-        //$newRegexB64 = base64_encode($newRegex);
-
-        // $mn is already set with the value we want.  No need for a 2nd variable name.
-        //$mn = $mn4LS;
-
-        //$sql = "INSERT INTO " . $this->tableRegexes . " (regex, mn) VALUES ('$newRegex','$mn') on DUPLICATE KEY UPDATE regex='$newRegex'";
-        $sql = "INSERT INTO $this->tableRegexes (regex, mn) VALUES ('$newRegex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
-        $this->wpdb->query($sql);
-
-        // Temporarily remove the looping
-        $spcItem = $spc4OldRegex;
-        $spcs = explode(',', $spc4OldRegex);
-        foreach ($spcs as $spcItem) {
-          // only send $postid _or_ $spc, never both
-          if (is_numeric($spcItem))
-            $this->linkscan($mn, $newRegex, $spcItem); // this is a postid
-          else {
-            $this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
-          }
-        }
+    // 3.3. Now run linkscan on each element of spc
+    $spcs = explode(',', $spc);
+    foreach ($spcs as $spcItem) {
+      // only send $postid _or_ $spc, never both
+      if (is_numeric($spcItem))
+        $this->linkscan($mn, $newRegex, $spcItem); // this is a postid
+      else {
+        $this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
       }
     }
-
-    // 4. -----------------------insert white list ---------------------------
-    // This is not relevant to any particular row and it's out of place here.
-    // whitelist may be 'set' but '' also.  If that's the case then no changes to the db occur.
-    // warning: this code does not check for set whitelist.  Should it ?
-    // This is not part of adding a new redirector record, the whitelist applies globally
-    //$whiteListTable = $this->wpdb->prefix . 'imb_whiteList';
-    //$refererRegexArray = explode("\n", $_POST['whiteList']);
-    //$delWLSql = "delete from $this->tableWhitelists";
-    //$this->wpdb->query($delWLSql);
-    //foreach ($refererRegexArray as $refererRegex) {
-      //$refererRegex = trim($refererRegex);
-      //if ($refererRegex == NULL)
-        //continue;
-      //$i = 5/0;
-      //$sql = "INSERT INTO " . $whiteListTable . " (refererRegex,status) VALUES ('$refererRegex',0) on DUPLICATE KEY UPDATE refererRegex='$refererRegex'";
-      //$this->wpdb->query($sql);
-    //}
-
-    // 5. Change the mn name?
-    //if($_POST['mnName'] != 'mn'){
-    //$chageParaSql = "INSERT INTO " . $whiteListTable . " (refererRegex,status) VALUES ('".$_POST['mnName']."',-1)";
-    //}
-    //$this->wpdb->query($chageParaSql);
 
   }
 

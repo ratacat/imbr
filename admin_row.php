@@ -37,7 +37,7 @@ class AdminRow {
 
     $page = $_GET['page'];
  
-    $r  = "<tr id='$mn'>";
+    $r  = "<tr id='$this->mn'>";
 
     $r .=   "<form action='options-general.php?page=$page' method='post'>";
     $r .=     $this->getHTMLFormContents();
