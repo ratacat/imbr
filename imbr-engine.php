@@ -564,7 +564,8 @@ class imbanditRedirector {
 
     // 3. This is only useful for testing when we need to reset the
     // posts to a known state.
-    $this->eraseAllPosts();
+    //Jared- I'm commenting this out as it was causing some frustration on the production testbed.
+    //$this->eraseAllPosts();
 
   }
 
