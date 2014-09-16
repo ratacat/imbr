@@ -4,7 +4,7 @@ require("admin_row.php");
 
 class imbanditRedirector {
 
-  public $imbV = 'v297.5';
+  public $imbV = '2.0.0';
 
   private $tableLinkscanners;
   private $tablePosts;
@@ -294,7 +294,7 @@ class imbanditRedirector {
   private function imb_red_editor_level3() {
 
     // 1. Now display the IMBR logo and revision.
-    echo "<img src=\"../wp-content/plugins/imbr/imbr.png\"><br>$this->imbV<br><br><br><br>";
+    echo "<img src=\"../wp-content/plugins/imbr/imbr.png\"><br>Version: $this->imbV<br><br><br><br>";
 
     // 2. Emit the Instruction Box HTML
     echo "<div id=\"instruction_box\">";
