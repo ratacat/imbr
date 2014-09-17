@@ -1,56 +1,111 @@
 <?php
 
+//
+// Table Manipulations by IMBR
+//
+// Sometimes we want to create new tables.  Sometimes we want to clear the contents of
+// existing tables.  Sometimes we want to modify the structure of existing tables.   How shall
+// all this fit together?
+//
+// First of all, we need to define some basic nomenclature re: table operations
+// lest we sink into the confusion of ambiguous naming.  We need to be able to do the following
+// four basic operations:
+//
+// 1. Create a new table.
+// 2. Truncate (empty) an existing table.
+// 3. Drop an existing table.
+// 4. Determine the existence (or not) of a table.
+//
+// Using these basic operations, there are two derived operations of interest:
+// 1. Initialize a table.  If the table exists, do nothing,  else create it.
+// 2. Reset a table.       If the table exists, truncate it, else create it.
+//
+// As you can see, initialize and reset are very similiar and it's tempting to lump them together into
+// one method.  Don't succumb to temptation.  These are separate operations and they should be kept separte.
+//
+// Given these basic and derived operations, there are three places where we might care to do any of this:
+//
+// 1. Upon Plugin Activation:
+//
+// For each imbr table
+//   Initialize
+//
+// 2. Upon Deactivation:
+//
+// Do nothing. Leave the tables and data intact.
+//
+// 3. Upon DB Reset:
+//
+// For each imbr table
+//   Reset
+//
+// Please notice that this scheme makes no provision for table migration when upgrading/downgrading the IMBR plugin.
+//
+
 require("admin_row.php");
 
 class imbanditRedirector {
 
   public $imbV = '2.0.0';
 
-  private $tableLinkscanners;
-  private $tablePosts;
-  private $tableRedirectors;
-  private $tableRegexes;
-  private $tableTerms;
-  private $tableTermRelationships;
-  private $tableWhitelists;
+  // The names of the db tables specifically for imbr
+  private static $tableLinkscanners;
+  private static $tableRedirectors;
+  private static $tableRegexes;
+  private static $tableWhitelists;
+
+  // The names of the db tables specifically for wordpress
+  private static $tablePosts;
+  private static $tableTerms;
+  private static $tableTermRelationships;
+
+  // A reference to the database itself
+  private static $wpdb;
 
   // This is the constructor for the imbr plugin class.  Its basic
-  // goal is to set 8 hooks that are executed whenever certain events happen.
+  // goal is to set eight hooks that are executed whenever certain events happen.
   // This is fundamentally how control is passed to the plugin code.
   public function __construct($wpdb) {
 
-    $this->wpdb = $wpdb;
+    // 1. We will need a reference to the database in order to invoke functionality on it.
+    self::$wpdb = $wpdb;
 
-    // This is how we arrange to get custom IMBR CSS injected into the admin screen html.
+    // 2. Setup some table names specific to the IMBR plugin.
+    self::$tableLinkscanners = self::$wpdb->prefix . 'imb_linkscanner';
+    self::$tableRedirectors  = self::$wpdb->prefix . 'imb_redirector';
+    self::$tableRegexes      = self::$wpdb->prefix . 'imb_regex';
+    self::$tableWhitelists   = self::$wpdb->prefix . 'imb_whitelist';
+
+    // 3. Now setup some table names specific to Wordpress.
+    self::$tablePosts             = self::$wpdb->prefix . 'posts';
+    self::$tableTerms             = self::$wpdb->prefix . 'terms';
+    self::$tableTermRelationships = self::$wpdb->prefix . 'term_relationships';
+
+    // 4. This is how we arrange to get custom IMBR CSS injected into the admin screen html.
     add_action('admin_enqueue_scripts', array(&$this, 'enqueIMBR_CSS'));
 
-    // The target of this hook will add the IMBR choice to the Settings menu.  Doing so involves
-    // specifiying another function to be called when the choice is selected.
+    // 5. The target of this hook will add the IMBR choice to the Settings menu.  Doing so involves
+    // specifying another function to be called when the choice is selected.
     add_action('admin_menu', array(&$this, 'addIMBROptionToAdminScreen'));
 
-    // This is how the redirection process gets triggered.
+    // 6. This is how the redirection process gets triggered.
     add_action('get_header', array(&$this, 'doRedirection'));
 
-    // The target of this hook will deal with new posts as they occur.
+    // 7. The target of this hook will deal with new posts as they occur.
     add_action('publish_post', array(&$this, 'handleNewPost'));
 
-    // What on Earth does this do?
+    // 8. What on Earth does this do?
     //add_action('wp_head', array(&$this, 'wp_add_red'));
 
-    // Something to do with control.js
+    // 9. Something to do with control.js
     //add_action('init', array(&$this, 'enqueueBackendFiles'));
 
-    //register_activation_hook(WP_PLUGIN_DIR . '/imbr/imbr.php', array(&$this, 'prc_plugin_install'));
-    //register_deactivation_hook(WP_PLUGIN_DIR . '/imbr/imbr.php', array(&$this, 'imb_deactivate'));
+    // 10. The target of this hook is called when the plugin is activated.
+    //     Note: This must apparently be a static method.
+    register_activation_hook(WP_PLUGIN_DIR . '/imbr/imbr.php', array(&$this, 'activate_plugin'));
 
-    // Now setup some table names
-    $this->tableLinkscanners      = $wpdb->prefix . 'imb_linkscanner';
-    $this->tablePosts             = $wpdb->prefix . 'posts';
-    $this->tableRedirectors       = $wpdb->prefix . 'imb_redirector';
-    $this->tableRegexes           = $wpdb->prefix . 'imb_regex';
-    $this->tableTerms             = $wpdb->prefix . 'terms';
-    $this->tableTermRelationships = $wpdb->prefix . 'term_relationships';
-    $this->tableWhitelists        = $wpdb->prefix . 'imb_whitelist';
+    // 11. The target of this hook is called when the plugin is deactivated.
+    //register_deactivation_hook(WP_PLUGIN_DIR . '/imbr/imbr.php', array(&$this, 'imb_deactivate'));
   }
 
   // Because we have hooked the admin_menu action, this code will be called at that time.
@@ -128,11 +183,11 @@ class imbanditRedirector {
   private function doRedirection_Phase1($mn) {
   
   	// 1. Get the redirector record
-  	$sql = "select * from $this->tableRedirectors where mn='$mn'";
+  	$sql = "select * from self::$tableRedirectors where mn='$mn'";
   	$redirector = $this->wpdb->get_row($sql);
   
   	// 2. Find one random linkscanner link that matches this mn, if any.
-  	$sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
+  	$sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
   	$linkscanner_row = $this->wpdb->get_row($sql);
   
   	// 3. Now determine the onsite redirection post and ultimate offsite target.
@@ -198,7 +253,7 @@ class imbanditRedirector {
   // use the WP API to individually delete them.
   private function eraseAllPosts() {
 
-    $sql = "SELECT * FROM " . $this->tablePosts;
+    $sql = "SELECT * FROM " . self::$tablePosts;
     $posts = $this->wpdb->get_results($sql, ARRAY_A);
     foreach ($posts as $post) {
       $postid = $post['ID'];
@@ -207,14 +262,14 @@ class imbanditRedirector {
 
     // Now reset the autoincrement postid to 1.  This will
     // help Selenium keep track of the postids for it's purposes.
-    $sql = "alter table $this->tablePosts auto_increment = 1";
+    $sql = "alter table self::$tablePosts auto_increment = 1";
     $this->wpdb->get_results($sql);
   }
 
   // Because we have hooked the publish_post action, this function will be
   // called whenever a new post is published.
   public function handleNewPost($post_id) {
-  	$sql = "SELECT * FROM $this->tableRegexes"; // who cares about the order?
+  	$sql = "SELECT * FROM self::$tableRegexes"; // who cares about the order?
   	$regexes = $this->wpdb->get_results($sql, ARRAY_A);
   	foreach ($regexes as $regex)
   		$this->linkscan($regex['mn'], $regex['regex'], $post_id);
@@ -258,9 +313,9 @@ class imbanditRedirector {
 
     // 1.2 Delete a specific redirector
     //if (isset($_POST['delete_redirector'])) {
-    //$query = "delete from $this->tableRedirectors where mn = '$_POST['delete_redirector']'";
+    //$query = "delete from self::$tableRedirectors where mn = '$_POST['delete_redirector']'";
     //$redirector = $_POST['delete_redirector'];
-    //$query = "delete from $this->tableRedirectors where mn = '$redirector'";
+    //$query = "delete from self::$tableRedirectors where mn = '$redirector'";
     //$this->wpdb->query($query);
 
     // 1.3 Save the contents of a single existing or new redirector record
@@ -352,7 +407,7 @@ class imbanditRedirector {
     // 3. Now output the table body
     echo "<tbody>";  // id=\"the-list\"
 
-    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM $this->tableRedirectors";
+    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM self::$tableRedirectors";
     $redirectors = $this->wpdb->get_results($redirectorsQuery);
 
     // Don't need this any more
@@ -393,7 +448,7 @@ class imbanditRedirector {
 
       // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
       // There can only be one regex associated with a given redirector.  Find that regex now.
-      $sql = "select * from $this->tableRegexes where mn = '$redirector->mn'";
+      $sql = "select * from self::$tableRegexes where mn = '$redirector->mn'";
       $regexRow = $this->wpdb->get_results($sql,ARRAY_A);
       ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
       $adminRow->link_scanner_div = "<input name='ls_regex_new' value='$regex' type='text'></input>";
@@ -402,7 +457,7 @@ class imbanditRedirector {
       $adminRow->manual_url_targets_div = "<textarea name='post_aff_url' type='text-area' >$redirector->url</textarea>";
 
       // 3.1.5 linkscanner_td (different than link_scanner_div)
-      $sql = "SELECT * FROM $this->tableLinkscanners WHERE mn = '$redirector->mn'";
+      $sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$redirector->mn'";
       $links = $this->wpdb->get_results($sql, ARRAY_A);
       $linksText = "";
 
@@ -503,18 +558,18 @@ class imbanditRedirector {
     // 2. Delete all traces of any imbr record that is associated with the given mn
 
     // 2.1. Delete anything in imb_redirector associated with the given mn
-    $this->wpdb->query("delete from $this->tableRedirectors where mn='$mn'");
+    $this->wpdb->query("delete from self::$tableRedirectors where mn='$mn'");
 
     // 2.2. Delete anything in imb_regex associated with the given mn
-    $this->wpdb->query("delete from $this->tableRegexes where mn='$mn'");
+    $this->wpdb->query("delete from self::$tableRegexes where mn='$mn'");
 
     // 2.3. Delete anything in imb_linkscanner associated with the given mn
-    $this->wpdb->query("delete from $this->tableLinkscanners where mn='$mn'");
+    $this->wpdb->query("delete from self::$tableLinkscanners where mn='$mn'");
 
     // 3. Now insert the relevant records
 
     // 3.1. Insert into imb_redirector
-    $query = "insert into $this->tableRedirectors set " .
+    $query = "insert into self::$tableRedirectors set " .
       "random_post = -1, " .    // presently unused
       "random_page = -1, " .    // presently unused
       "url = '" . $_POST['post_aff_url'] . "', " .  // aka post_aff_url aka manual url targets
@@ -525,7 +580,7 @@ class imbanditRedirector {
     $this->wpdb->query($query);
 
     // 3.2. Insert into imb_regex
-    $query = "INSERT INTO $this->tableRegexes (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
+    $query = "INSERT INTO self::$tableRegexes (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
     $this->wpdb->query($query);
 
     // 3.3. Now run linkscan on each element of spc
@@ -541,17 +596,25 @@ class imbanditRedirector {
 
   }
 
-  // This function will delete the imbr files from the db,
-  // if present, and then recreate them.  This is suitable for
-  // "resetting" the db back to a beginning condition or for
-  // originally initializing it as upon installtion.
-  //
-  // The original method used dbDelta
-  // which required wp-admin/includes/upgrade.php.  However, dbDelta
-  // is a finicky beast and not needed when we only choose to create
-  // tables, instead of modifying them.
-  private function resetDatabase() {
+  // This function will create the imbr tables in the db,
+  // if they don't already exist.  If they do exist, then don't do anything with them.
+  private function initDatabase() {
 
+    // 1. Initialize the imbr tables
+    $this->initLinkscanners();
+    $this->initRedirectors();
+    $this->initRegexes();
+    $this->initWhitelists();
+
+    // 2. Reset the url regex to the initial state
+    $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
+    update_option('jsim_url_regex', $jsim_url_regex);
+  }
+
+  // This function will create the imbr tables in the db,
+  // if they don't already exist.  If they do exist, then truncate them.
+  private function resetDatabase() {
+  
     // 1. Reset the imbr tables
     $this->resetLinkscanners();
     $this->resetRedirectors();
@@ -569,18 +632,10 @@ class imbanditRedirector {
 
   }
 
-  // Drop the imb_linkscanner table, if it exists, and then
-  // recreate it.
-  private function resetLinkscanners() {
-
-    $tableExists = $this->imb_tableExists($this->tableLinkscanners);
-    if ($tableExists) {
-      $sql = "DROP TABLE `$this->tableLinkscanners`";
-      $this->wpdb->query($sql);
-    }
-
-    // single_pages_categories aka "category slubs + postIDs"
-    $sql = "CREATE TABLE " . $this->tableLinkscanners . " (
+  // Create the imb_linkscanner table.
+  private static function createLinkscanners() {
+    // single_pages_categories aka "category slugs + postIDs"
+    $sql = "CREATE TABLE " . self::$tableLinkscanners . " (
       id INT(11) NOT NULL AUTO_INCREMENT,
       postid INT(11) NOT NULL,
       mn INT(4) unsigned NOT NULL,
@@ -589,21 +644,30 @@ class imbanditRedirector {
       regex varchar(255),
       PRIMARY KEY  (id)
     );";
-    $this->wpdb->query($sql);
+  	self::$wpdb->query($sql);
   }
-  // Drop the imb_redirector table, if it exists, and then
-  // recreate it.
 
-  private function resetRedirectors() {
+  // If the imb_linkscanner table exists, do nothing.  Else create it.
+  private static function initLinkscanners() {
+    $tableExists = self::imb_tableExists(self::$tableLinkscanners);
+    if (!$tableExists) self::createLinkScanners();
+  }
 
-    $tableExists = $this->imb_tableExists($this->tableRedirectors);
+  // If the imb_linkscanner table exists, truncate it.  Else create it.
+  private static function resetLinkscanners() {
+    $tableExists = self::imb_tableExists(self::$tableLinkscanners);
     if ($tableExists) {
-      $sql = "DROP TABLE `$this->tableRedirectors`";
-      $this->wpdb->query($sql);
+      $sql = "TRUNCATE TABLE `" . self::tableLinkscanners . "`";
+      self::$wpdb->query($sql);
     }
+    else
+      self::createLinkScanners();
+  }
 
-    // single_pages_categories aka "category slubs + postIDs"
-    $sql = "CREATE TABLE `" . $this->tableRedirectors . "` (
+
+  // Create the imb_redirector table.
+  private static function createRedirectors() {
+    $sql = "CREATE TABLE `" . self::$tableRedirectors . "` (
       `id` int( 11 ) NOT NULL AUTO_INCREMENT ,
       `random_post` bool,
       `random_page` bool,
@@ -613,53 +677,86 @@ class imbanditRedirector {
       `rand` int( 11 ) NOT NULL ,
       `post_identifier` longtext,
       PRIMARY KEY ( `id` )
-      ) AUTO_INCREMENT =1 DEFAULT CHARSET = cp1251";
-    $this->wpdb->query($sql);
+      ) AUTO_INCREMENT =1";
+    self::$wpdb->query($sql);
   }
 
-  // Drop the imb_regex table, if it exists, and then
-  // recreate it.
-  private function resetRegexes() {
+  // If the imb_redirector table exists, do nothing.  Else create it.
+  private static function initRedirectors() {
+    $tableExists = self::imb_tableExists(self::$tableRedirectors);
+    if (!$tableExists) self::createRedirectors();
+  }
 
-    $tableExists = $this->imb_tableExists($this->tableRegexes);
+  // If the imb_redirector table exists, truncate it.  Else create it.
+  private static function resetRedirectors() {
+
+    $tableExists = self::imb_tableExists(self::$tableRedirectors); 
     if ($tableExists) {
-      $sql = "DROP TABLE `$this->tableRegexes`";
-      $this->wpdb->query($sql);
+      $sql = "TRUNCATE TABLE `" . self::tableRedirectors . "`";
+      self::$wpdb->query($sql);
     }
+    else
+      self::createRedirectors();
+  }
 
-    $sql = "CREATE TABLE " . $this->tableRegexes . " (
+
+  // Create the imb_regex table.
+  private static function createRegexes() {
+    $sql = "CREATE TABLE " . self::$tableRegexes . " (
       `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
       `regex` varchar(255) NOT NULL,
       `mn` int(4) NOT NULL,
       PRIMARY KEY (`id`),
       UNIQUE KEY `UX1` (`mn`)
     );";
-    $this->wpdb->query($sql);
+    self::$wpdb->query($sql);
   }
 
-  // Drop the imb_whitelist table, if it exists, and then
-  // recreate it.
-  private function resetWhitelists() {
+  // If the imb_regex table exists, do nothing.  Else create it.
+  private static function initRegexes() {
+    $tableExists = self::imb_tableExists(self::$tableRegexes);
+    if (!$tableExists) self::createRegexes();
+  }
 
-  	$tableExists = $this->imb_tableExists($this->tableWhitelists);
+  // If the imb_regex table exists, truncate it.  Else create it.
+  private static function resetRegexes() {
+
+    $tableExists = self::imb_tableExists(self::$tableRegexes); 
     if ($tableExists) {
-      $sql = "DROP TABLE `$this->tableWhitelists`";
-      $this->wpdb->query($sql);
+      $sql = "TRUNCATE TABLE `" . self::$tableRegexes . "`";
+      self::$wpdb->query($sql);
     }
+    else
+      self::createRegexes();
+  }
 
-    $sql = "CREATE TABLE `" . $this->tableWhitelists . "` (
+  // Create the imb_whitelist table.
+  private static function createWhitelists() {
+    $sql = "CREATE TABLE `" . self::$tableWhitelists . "` (
       `id` int( 11 ) NOT NULL AUTO_INCREMENT ,
       `refererRegex` VARCHAR(1000),
       `status` int(11),
       PRIMARY KEY ( `id` )
-      ) AUTO_INCREMENT =1 DEFAULT CHARSET = cp1251";
-    $this->wpdb->query($sql);
+      ) AUTO_INCREMENT =1";
+    self::$wpdb->query($sql);
   }
 
-////////////////////////
+  // If the imb_whitelist table exists, do nothing.  Else create it.
+  private static function initWhitelists() {
+    $tableExists = self::imb_tableExists(self::$tableWhitelists);
+    if (!$tableExists) self::createWhitelists();
+  }
 
-
-
+  // If the imb_whitelist table exists, truncate it.  Else create it.
+  private static function resetWhitelists() {
+    $tableExists = self::imb_tableExists(self::$tableWhitelists);
+    if ($tableExists) {
+      $sql = "TRUNCATE TABLE `" . self::$tableWhitelists . "`";
+      self::$wpdb->query($sql);
+    }
+    else
+      self::createWhitelists();
+  }
 
 
   // This function will take a comma delimted list of
@@ -723,7 +820,7 @@ class imbanditRedirector {
     }
 
     // 2. Now retrieve the relevant posts
-    $sql = "SELECT * FROM " . $this->tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
+    $sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
       . "AND post_type = 'post' $postStr ";
     //ORDER by id desc"; // who cares what order?
     $posts = $this->wpdb->get_results($sql, ARRAY_A);
@@ -773,63 +870,62 @@ class imbanditRedirector {
         }
 
         foreach ($final_links as $url) {
-          $sql = "insert into $this->tableLinkscanners (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
+          $sql = "insert into self::$tableLinkscanners (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
         	$this->wpdb->query($sql);
         }
       } // if preg_match_all
     } // for each post
   }
 
-  private function imb_tableExists($table) {
+  private static function imb_tableExists($table) {
     $sql = "SHOW TABLES LIKE '$table'";
-    $r = $this->wpdb->get_row($sql);
+    //$r = $this->wpdb->get_row($sql);
+    $r = self::$wpdb->get_row($sql);
     return $r;
+  }
+
+  // called because of register_activation_hook, upon activation of this plugin.
+  public static function activate_plugin() {
+    //include("phpclient.php");
+    //$server_url = "http://imbandit.com/app/server/licenseserver.php";
+    //$license_array = processLicense($server_url);
+    //if ($license_array[6] != 'active')
+    //die('Product not properly licensed. Please obtain a legal license from <a href="http://imbandit.com">Imbandit Website</a>');
+
+    self::initLinkscanners();
+    self::initRedirectors();
+    self::initRegexes();
+    self::initWhitelists();
+
+    //move controls.js
+    //$f1 = $this->im_get_wp_root()."wp-content/plugins/imbr/controls.js";
+    //$f1contents = file_get_contents($f1);
+    //file_put_contents($this->im_get_wp_root()."wp-includes/js/controls.js",$f1contents);
+    //self::$tableLinkscanners      = $wpdb->prefix . 'imb_linkscanner';
+
+  
   }
 
 }
 
+// called because of add_action(wp_head...
+// What does this do?
+//public function wp_add_red($unused) {
+//echo "<qqqphp if (private function_exists('wp_jdis()()')) if (wp_jdis()()) exit(); QQQ>";
+//}
+//private function getOptions() {
+//Don't forget to set up the default options
+//if (!$options = get_option('imbandit')) {
+//$options = array('default' => 'options');
+//update_option('imbandit', $options);
+//}
+//unset($options['apiKey']); update_option('imbandit', $options);exit;
+//return $options;
+//}
   // called because of add_action(init...
   // we enqueue this same file in enqueIMBR_CSS.  Why do it in two places?
   //public function enqueueBackendFiles() {
     //wp_enqueue_script("controls.js", "/wp-includes/js/controls.js", array(), "0.0.1", true);
-  //}
-
-  // called because of register_activation_hook
-  //private function prc_plugin_install() {
-  //$i = 5/0;
-  //$i = 5/0;
-  //exit();
-  //include("phpclient.php");
-  //$server_url = "http://imbandit.com/app/server/licenseserver.php";
-  //$license_array = processLicense($server_url);
-  //if ($license_array[6] != 'active')
-  //die('Product not properly licensed. Please obtain a legal license from <a href="http://imbandit.com">Imbandit Website</a>');
-  //run imbandit init
-  //$this->imb_init();
-  //run linkscanner init
-  //$this->ls_init();
-  //run whiteList init
-  //$this->wl_init();
-  //move controls.js
-  ///* $f1 = $this->im_get_wp_root()."wp-content/plugins/imbr/controls.js";
-  //$f1contents = file_get_contents($f1);
-  //file_put_contents($this->im_get_wp_root()."wp-includes/js/controls.js",$f1contents); */
-  //}
-
-  // called because of add_action(wp_head...
-  // What does this do?
-  //public function wp_add_red($unused) {
-  //echo "<qqqphp if (private function_exists('wp_jdis()()')) if (wp_jdis()()) exit(); QQQ>";
-  //}
-
-  //private function getOptions() {
-  //Don't forget to set up the default options
-  //if (!$options = get_option('imbandit')) {
-  //$options = array('default' => 'options');
-  //update_option('imbandit', $options);
-  //}
-  //unset($options['apiKey']); update_option('imbandit', $options);exit;
-  //return $options;
   //}
 
   //private function checkApiKey() {
