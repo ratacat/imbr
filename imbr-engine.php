@@ -277,8 +277,7 @@ class imbanditRedirector {
 
   // called because of register_deactivation_hook
   private function imb_deactivate() {
-  	$i = 5/0;
-  	exit();
+    exit();
     $options = $this->getOptions();
     $options['apiKey'] = '';
     update_option('imbandit', $options);
@@ -820,6 +819,8 @@ class imbanditRedirector {
     }
 
     // 2. Now retrieve the relevant posts
+    //$sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
+    //  . "AND post_type = 'post' $postStr ";
     $sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
       . "AND post_type = 'post' $postStr ";
     //ORDER by id desc"; // who cares what order?
