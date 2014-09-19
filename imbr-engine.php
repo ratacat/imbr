@@ -407,7 +407,7 @@ class imbanditRedirector {
     echo "<tbody>";  // id=\"the-list\"
 
     $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM self::$tableRedirectors";
-    $redirectors = $this->wpdb->get_results($redirectorsQuery);
+    $redirectors = self::$wpdb->get_results($redirectorsQuery);
 
     // Don't need this any more
     //$i = 1; // index of populated rows
@@ -656,7 +656,7 @@ class imbanditRedirector {
   private static function resetLinkscanners() {
     $tableExists = self::imb_tableExists(self::$tableLinkscanners);
     if ($tableExists) {
-      $sql = "TRUNCATE TABLE `" . self::tableLinkscanners . "`";
+      $sql = "TRUNCATE TABLE `" . self::$tableLinkscanners . "`";
       self::$wpdb->query($sql);
     }
     else
@@ -691,7 +691,7 @@ class imbanditRedirector {
 
     $tableExists = self::imb_tableExists(self::$tableRedirectors); 
     if ($tableExists) {
-      $sql = "TRUNCATE TABLE `" . self::tableRedirectors . "`";
+      $sql = "TRUNCATE TABLE `" . self::$tableRedirectors . "`";
       self::$wpdb->query($sql);
     }
     else
