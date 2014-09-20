@@ -184,11 +184,11 @@ class imbanditRedirector {
   
   	// 1. Get the redirector record
   	$sql = "select * from self::$tableRedirectors where mn='$mn'";
-  	$redirector = $this->wpdb->get_row($sql);
+  	$redirector = self::$wpdb->get_row($sql);
   
   	// 2. Find one random linkscanner link that matches this mn, if any.
   	$sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
-  	$linkscanner_row = $this->wpdb->get_row($sql);
+  	$linkscanner_row = self::$wpdb->get_row($sql);
   
   	// 3. Now determine the onsite redirection post and ultimate offsite target.
   	if ($linkscanner_row) {
@@ -251,10 +251,10 @@ class imbanditRedirector {
 
   // This function will iterate over all the posts and then
   // use the WP API to individually delete them.
-  private function eraseAllPosts() {
+  private static function eraseAllPosts() {
 
     $sql = "SELECT * FROM " . self::$tablePosts;
-    $posts = $this->wpdb->get_results($sql, ARRAY_A);
+    $posts = self::$wpdb->get_results($sql, ARRAY_A);
     foreach ($posts as $post) {
       $postid = $post['ID'];
       wp_delete_post($postid, true /* delete, no trashcan */);
@@ -263,14 +263,14 @@ class imbanditRedirector {
     // Now reset the autoincrement postid to 1.  This will
     // help Selenium keep track of the postids for it's purposes.
     $sql = "alter table self::$tablePosts auto_increment = 1";
-    $this->wpdb->get_results($sql);
+    self::$wpdb->get_results($sql);
   }
 
   // Because we have hooked the publish_post action, this function will be
   // called whenever a new post is published.
   public function handleNewPost($post_id) {
   	$sql = "SELECT * FROM self::$tableRegexes"; // who cares about the order?
-  	$regexes = $this->wpdb->get_results($sql, ARRAY_A);
+  	$regexes = self::$wpdb->get_results($sql, ARRAY_A);
   	foreach ($regexes as $regex)
   		$this->linkscan($regex['mn'], $regex['regex'], $post_id);
   }
@@ -310,14 +310,20 @@ class imbanditRedirector {
     if (isset($_POST['redirector_databaseclear'])) {
       $this->resetDatabase();
 
-    // 1.2 Delete a specific redirector
+    // 1.2 Truncate the wordpress posts table.  Only used for automated testing.
+    } else if (isset($_POST['truncate_wordpress_posts'])) {
+      //This is only useful for testing when we need to reset the
+      //posts to a known state.
+      self::eraseAllPosts();
+
+    // 1.3 Delete a specific redirector
     //if (isset($_POST['delete_redirector'])) {
     //$query = "delete from self::$tableRedirectors where mn = '$_POST['delete_redirector']'";
     //$redirector = $_POST['delete_redirector'];
     //$query = "delete from self::$tableRedirectors where mn = '$redirector'";
-    //$this->wpdb->query($query);
+    //self::$wpdb->query($query);
 
-    // 1.3 Save the contents of a single existing or new redirector record
+    // 1.4 Save the contents of a single existing or new redirector record
     } else if (isset($_POST['save_redirector'])) {
       $this->redirector_save();
     }
@@ -374,14 +380,22 @@ class imbanditRedirector {
     // Emit that table now.
     $this->imb_red_editor_table_contents();
 
-    // 4. redirector database clear button
-    echo "<div id=\"reset_database_div\">";
+    // 4. Reset IMBR database button
     $page = $_GET['page'];
-    echo "<form action=\"options-general.php?page=$page\" method=\"post\">";
-    echo "<input type=\"hidden\" name=\"redirector_databaseclear\" value=\"yes\" />";
-    echo "<input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
-    echo "</form>";
+    echo "<div id=\"reset_database_div\">";
+    echo "  <form action=\"options-general.php?page=$page\" method=\"post\">";
+    echo "    <input type=\"hidden\" name=\"redirector_databaseclear\" value=\"yes\" />";
+    echo "    <input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Reset Database\" />";
+    echo "  </form>";
     echo "</div>"; // reset_database_div
+
+    // 5. Empty posts button
+    echo "<div id=\"empty_posts_div\">";
+    echo "  <form action=\"options-general.php?page=$page\" method=\"post\">";
+    echo "    <input type=\"hidden\" name=\"truncate_wordpress_posts\" value=\"yes\" />";
+    echo "    <input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Clear All Posts\" />";
+    echo "  </form>";
+    echo "</div>"; // empty_posts_div
   }
 
   // The major part of the admin screen is displayed in a table.  This is the list of existing
@@ -448,7 +462,7 @@ class imbanditRedirector {
       // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
       // There can only be one regex associated with a given redirector.  Find that regex now.
       $sql = "select * from self::$tableRegexes where mn = '$redirector->mn'";
-      $regexRow = $this->wpdb->get_results($sql,ARRAY_A);
+      $regexRow = self::$wpdb->get_results($sql,ARRAY_A);
       ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
       $adminRow->link_scanner_div = "<input name='ls_regex_new' value='$regex' type='text'></input>";
 
@@ -457,7 +471,7 @@ class imbanditRedirector {
 
       // 3.1.5 linkscanner_td (different than link_scanner_div)
       $sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$redirector->mn'";
-      $links = $this->wpdb->get_results($sql, ARRAY_A);
+      $links = self::$wpdb->get_results($sql, ARRAY_A);
       $linksText = "";
 
       foreach ($links as $link) {
@@ -557,13 +571,13 @@ class imbanditRedirector {
     // 2. Delete all traces of any imbr record that is associated with the given mn
 
     // 2.1. Delete anything in imb_redirector associated with the given mn
-    $this->wpdb->query("delete from self::$tableRedirectors where mn='$mn'");
+    self::$wpdb->query("delete from self::$tableRedirectors where mn='$mn'");
 
     // 2.2. Delete anything in imb_regex associated with the given mn
-    $this->wpdb->query("delete from self::$tableRegexes where mn='$mn'");
+    self::$wpdb->query("delete from self::$tableRegexes where mn='$mn'");
 
     // 2.3. Delete anything in imb_linkscanner associated with the given mn
-    $this->wpdb->query("delete from self::$tableLinkscanners where mn='$mn'");
+    self::$wpdb->query("delete from self::$tableLinkscanners where mn='$mn'");
 
     // 3. Now insert the relevant records
 
@@ -576,11 +590,11 @@ class imbanditRedirector {
       "mn = '$mn', " .
       "rand = -1, " .           // presently unused
       "post_identifier = 'N/A'"; // presently unused
-    $this->wpdb->query($query);
+    self::$wpdb->query($query);
 
     // 3.2. Insert into imb_regex
     $query = "INSERT INTO self::$tableRegexes (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
-    $this->wpdb->query($query);
+    self::$wpdb->query($query);
 
     // 3.3. Now run linkscan on each element of spc
     $spcs = explode(',', $spc);
@@ -623,11 +637,6 @@ class imbanditRedirector {
     // 2. Reset the url regex to the initial state
     $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
     update_option('jsim_url_regex', $jsim_url_regex);
-
-    // 3. This is only useful for testing when we need to reset the
-    // posts to a known state.
-    //Jared- I'm commenting this out as it was causing some frustration on the production testbed.
-    //$this->eraseAllPosts();
 
   }
 
@@ -771,7 +780,7 @@ class imbanditRedirector {
       "left join wp_posts         on wp_term_relationships.object_id        = wp_posts.ID " .
       "left join wp_terms         on wp_term_taxonomy.term_id               = wp_terms.term_id " .
       "where (name in ('$quotedSpc') or ID in('$quotedSpc')) and post_parent=0 and post_status = 'publish'";
-    return $this->wpdb->get_results($sql, ARRAY_A);
+    return self::$wpdb->get_results($sql, ARRAY_A);
   }
 
   // This method will find all the posts associated with $postid _or_ $spc,
@@ -801,7 +810,7 @@ class imbanditRedirector {
       $sql = "select object_id from wp_term_relationships left join "
         . "wp_term_taxonomy on wp_term_relationships.term_taxonomy_id = wp_term_taxonomy.term_taxonomy_id left join "
         . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$spc')";
-      $postIdFromTerms = $this->wpdb->get_results($sql);
+      $postIdFromTerms = self::$wpdb->get_results($sql);
       $postIds = '';
       foreach ($postIdFromTerms as $postIdFromTerm) {
         if(!$postIds){
@@ -824,7 +833,7 @@ class imbanditRedirector {
     $sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
       . "AND post_type = 'post' $postStr ";
     //ORDER by id desc"; // who cares what order?
-    $posts = $this->wpdb->get_results($sql, ARRAY_A);
+    $posts = self::$wpdb->get_results($sql, ARRAY_A);
 
     // 3. Iterate over all the posts and examine them for matching links.  Deal with
     //    whatever matched links are found.
@@ -872,7 +881,7 @@ class imbanditRedirector {
 
         foreach ($final_links as $url) {
           $sql = "insert into self::$tableLinkscanners (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
-        	$this->wpdb->query($sql);
+        	self::$wpdb->query($sql);
         }
       } // if preg_match_all
     } // for each post
@@ -880,7 +889,7 @@ class imbanditRedirector {
 
   private static function imb_tableExists($table) {
     $sql = "SHOW TABLES LIKE '$table'";
-    //$r = $this->wpdb->get_row($sql);
+    //$r = self::$wpdb->get_row($sql);
     $r = self::$wpdb->get_row($sql);
     return $r;
   }
