@@ -1,10 +1,10 @@
 <?php
 
-// This class will model the data and produce the HTML required
+// This class will model the data, and produce the HTML required,
 // for one redirector row, as displayed by the IMBR admin screen.
 // The rows may be "populated" or not.  Populated means that the
 // row contains data for an existing redirector record.  Unpopulated
-// means that the row to display, although similar to ordinary rows,
+// means that the row to display, although similar to populated rows,
 // is not to be populated with non-existent data and is instead used
 // as a data-entry form.
 
@@ -14,8 +14,8 @@ class AdminRow {
   // used to enter a new row is not populated.  There are slight differences
   // between the HTML for these types, hence this flag.
   public $populated = true;
-	
-  // Every tr will have an id=NNN for populated rows or id= for the new 
+
+  // Every tr will have a tag id=NNN for populated rows or id='newRedirector' for the new 
   // redirector entry row.
   public $mn = "";
 
@@ -36,7 +36,8 @@ class AdminRow {
   public function getHTML() {
 
     $page = $_GET['page'];
- 
+
+    if ($this->mn == '') $this->mn = 'newRedirector';
     $r  = "<tr id='$this->mn'>";
 
     $r .=   "<form action='options-general.php?page=$page' method='post'>";

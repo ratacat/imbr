@@ -503,6 +503,7 @@ class imbanditRedirector {
     // 3.2 Now emit a table row to contain the controls for a new redirector.
     $adminRow = new AdminRow();
     $adminRow->populated = false; // This is the unpopulated data-entry row
+    //$adminRow->mn = 'newRedirector'; // Don't set this here, this is a job for getHtml.
 
     // 3.2.1 category slugs + post ids, aka single_pages_categories
     $adminRow->cat_slug_ids_div = "<input name='single_pages_categories' type='text' >";
