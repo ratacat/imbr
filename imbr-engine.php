@@ -183,11 +183,11 @@ class imbanditRedirector {
   private function doRedirection_Phase1($mn) {
   
   	// 1. Get the redirector record
-  	$sql = "select * from self::$tableRedirectors where mn='$mn'";
+  	$sql = "select * from " . self::$tableRedirectors . " where mn='$mn'";
   	$redirector = self::$wpdb->get_row($sql);
   
   	// 2. Find one random linkscanner link that matches this mn, if any.
-  	$sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
+  	$sql = "SELECT * FROM " . self::$tableLinkscanners . " WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
   	$linkscanner_row = self::$wpdb->get_row($sql);
   
   	// 3. Now determine the onsite redirection post and ultimate offsite target.
@@ -262,14 +262,14 @@ class imbanditRedirector {
 
     // Now reset the autoincrement postid to 1.  This will
     // help Selenium keep track of the postids for it's purposes.
-    $sql = "alter table self::$tablePosts auto_increment = 1";
+    $sql = "alter table " . self::$tablePosts . " auto_increment = 1";
     self::$wpdb->get_results($sql);
   }
 
   // Because we have hooked the publish_post action, this function will be
   // called whenever a new post is published.
   public function handleNewPost($post_id) {
-  	$sql = "SELECT * FROM self::$tableRegexes"; // who cares about the order?
+  	$sql = "SELECT * FROM " . self::$tableRegexes; // who cares about the order?
   	$regexes = self::$wpdb->get_results($sql, ARRAY_A);
   	foreach ($regexes as $regex)
   		$this->linkscan($regex['mn'], $regex['regex'], $post_id);
@@ -299,6 +299,7 @@ class imbanditRedirector {
   // is subdivided accordingly.
   public function imb_red_editor() {
 
+  	xdebug_break();
     // 1. In the event this function has been called via a POST request,
     // look for certain commands as POST parameters and execute them first,
     // and then continue with the ordinary display of the admin screen.
@@ -308,7 +309,7 @@ class imbanditRedirector {
 
     // 1.1 Reset the database?
     if (isset($_POST['redirector_databaseclear'])) {
-      $this->resetDatabase();
+      self::resetDatabase();
 
     // 1.2 Truncate the wordpress posts table.  Only used for automated testing.
     } else if (isset($_POST['truncate_wordpress_posts'])) {
@@ -393,7 +394,7 @@ class imbanditRedirector {
     echo "<div id=\"empty_posts_div\">";
     echo "  <form action=\"options-general.php?page=$page\" method=\"post\">";
     echo "    <input type=\"hidden\" name=\"truncate_wordpress_posts\" value=\"yes\" />";
-    echo "    <input id=\"database_reset\"class=\"c_button_link\" type=\"submit\" value=\"Clear All Posts\" />";
+    echo "    <input id=\"empty_posts\"class=\"c_button_link\" type=\"submit\" value=\"Clear All Posts\" />";
     echo "  </form>";
     echo "</div>"; // empty_posts_div
   }
@@ -420,7 +421,7 @@ class imbanditRedirector {
     // 3. Now output the table body
     echo "<tbody>";  // id=\"the-list\"
 
-    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM self::$tableRedirectors";
+    $redirectorsQuery = "SELECT id, random_post, random_page, url, single_pages_categories, mn, rand FROM " . self::$tableRedirectors;
     $redirectors = self::$wpdb->get_results($redirectorsQuery);
 
     // Don't need this any more
@@ -461,7 +462,7 @@ class imbanditRedirector {
 
       // 3.1.3 ls_regex_new aka linkscanner urls (different than linkscanner_td)
       // There can only be one regex associated with a given redirector.  Find that regex now.
-      $sql = "select * from self::$tableRegexes where mn = '$redirector->mn'";
+      $sql = "select * from " . self::$tableRegexes . " where mn = '$redirector->mn'";
       $regexRow = self::$wpdb->get_results($sql,ARRAY_A);
       ( count($regexRow) == 1) ? $regex = $regexRow[0]['regex'] : $regex = "";
       $adminRow->link_scanner_div = "<input name='ls_regex_new' value='$regex' type='text'></input>";
@@ -470,7 +471,7 @@ class imbanditRedirector {
       $adminRow->manual_url_targets_div = "<textarea name='post_aff_url' type='text-area' >$redirector->url</textarea>";
 
       // 3.1.5 linkscanner_td (different than link_scanner_div)
-      $sql = "SELECT * FROM self::$tableLinkscanners WHERE mn = '$redirector->mn'";
+      $sql = "SELECT * FROM " . self::$tableLinkscanners . " WHERE mn = '$redirector->mn'";
       $links = self::$wpdb->get_results($sql, ARRAY_A);
       $linksText = "";
 
@@ -572,18 +573,17 @@ class imbanditRedirector {
     // 2. Delete all traces of any imbr record that is associated with the given mn
 
     // 2.1. Delete anything in imb_redirector associated with the given mn
-    self::$wpdb->query("delete from self::$tableRedirectors where mn='$mn'");
+    self::$wpdb->query("delete from " . self::$tableRedirectors . " where mn='$mn'");
 
     // 2.2. Delete anything in imb_regex associated with the given mn
-    self::$wpdb->query("delete from self::$tableRegexes where mn='$mn'");
+    self::$wpdb->query("delete from " . self::$tableRegexes . " where mn='$mn'");
 
     // 2.3. Delete anything in imb_linkscanner associated with the given mn
-    self::$wpdb->query("delete from self::$tableLinkscanners where mn='$mn'");
+    self::$wpdb->query("delete from " . self::$tableLinkscanners . " where mn='$mn'");
 
     // 3. Now insert the relevant records
-
     // 3.1. Insert into imb_redirector
-    $query = "insert into self::$tableRedirectors set " .
+    $query = "insert into " . self::$tableRedirectors . " set " .
       "random_post = -1, " .    // presently unused
       "random_page = -1, " .    // presently unused
       "url = '" . $_POST['post_aff_url'] . "', " .  // aka post_aff_url aka manual url targets
@@ -594,7 +594,8 @@ class imbanditRedirector {
     self::$wpdb->query($query);
 
     // 3.2. Insert into imb_regex
-    $query = "INSERT INTO self::$tableRegexes (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
+    //$query = "INSERT INTO " . self::$tableRegexes . " (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
+    $query = "INSERT INTO " . self::$tableRegexes . " (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$regex'";
     self::$wpdb->query($query);
 
     // 3.3. Now run linkscan on each element of spc
@@ -602,9 +603,11 @@ class imbanditRedirector {
     foreach ($spcs as $spcItem) {
       // only send $postid _or_ $spc, never both
       if (is_numeric($spcItem))
-        $this->linkscan($mn, $newRegex, $spcItem); // this is a postid
+        //->linkscan($mn, $newRegex, $spcItem); // this is a postid
+        $this->linkscan($mn, $regex, $spcItem); // this is a postid
       else {
-        $this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
+        //$this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
+        $this->linkscan($mn, $regex, NULL,$spcItem); // this is a spc
       }
     }
 
@@ -612,13 +615,13 @@ class imbanditRedirector {
 
   // This function will create the imbr tables in the db,
   // if they don't already exist.  If they do exist, then don't do anything with them.
-  private function initDatabase() {
+  private static function initDatabase() {
 
     // 1. Initialize the imbr tables
-    $this->initLinkscanners();
-    $this->initRedirectors();
-    $this->initRegexes();
-    $this->initWhitelists();
+    self::initLinkscanners();
+    self::initRedirectors();
+    self::initRegexes();
+    self::initWhitelists();
 
     // 2. Reset the url regex to the initial state
     $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
@@ -627,13 +630,13 @@ class imbanditRedirector {
 
   // This function will create the imbr tables in the db,
   // if they don't already exist.  If they do exist, then truncate them.
-  private function resetDatabase() {
+  private static function resetDatabase() {
   
     // 1. Reset the imbr tables
-    $this->resetLinkscanners();
-    $this->resetRedirectors();
-    $this->resetRegexes();
-    $this->resetWhitelists();
+    self::resetLinkscanners();
+    self::resetRedirectors();
+    self::resetRegexes();
+    self::resetWhitelists();
 
     // 2. Reset the url regex to the initial state
     $jsim_url_regex = '((mailto\:|(news|(ht|f)tp(s?))\://){1}\S+)';
@@ -881,8 +884,8 @@ class imbanditRedirector {
         }
 
         foreach ($final_links as $url) {
-          $sql = "insert into self::$tableLinkscanners (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
-        	self::$wpdb->query($sql);
+          $sql = "insert into " . self::$tableLinkscanners . " (postid, mn, link, regex, single_pages_categories) values('$pid','$mn', '$url','N/A','N/A')";
+          self::$wpdb->query($sql);
         }
       } // if preg_match_all
     } // for each post
