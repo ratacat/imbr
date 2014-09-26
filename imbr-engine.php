@@ -299,7 +299,6 @@ class imbanditRedirector {
   // is subdivided accordingly.
   public function imb_red_editor() {
 
-  	xdebug_break();
     // 1. In the event this function has been called via a POST request,
     // look for certain commands as POST parameters and execute them first,
     // and then continue with the ordinary display of the admin screen.
