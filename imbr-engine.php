@@ -317,11 +317,11 @@ class imbanditRedirector {
       self::eraseAllPosts();
 
     // 1.3 Delete a specific redirector
-    //if (isset($_POST['delete_redirector'])) {
-    //$query = "delete from self::$tableRedirectors where mn = '$_POST['delete_redirector']'";
-    //$redirector = $_POST['delete_redirector'];
-    //$query = "delete from self::$tableRedirectors where mn = '$redirector'";
-    //self::$wpdb->query($query);
+    } else if (isset($_POST['delete_redirector'])) {
+      //$query = "delete from self::$tableRedirectors where mn = '$_POST['delete_redirector']'";
+      //$redirector = $_POST['delete_redirector'];
+      //$query = "delete from self::$tableRedirectors where mn = '$redirector'";
+      //self::$wpdb->query($query);
 
     // 1.4 Save the contents of a single existing or new redirector record
     } else if (isset($_POST['save_redirector'])) {
@@ -495,6 +495,9 @@ class imbanditRedirector {
         . "<input name='mn' type='text' value='$redirector->mn' size='3\'>"
         . "</label>";
 
+      $adminRow->other_delete_div = "<input name='delete_redirector' class='c_button_link' type='submit' value='Delete' />"
+        . "</label>";
+
       $adminRow->other_save_div = "<input name='save_redirector' class='c_button_link' type='submit' value='Save' />";
 
       echo $adminRow->getHTML();
@@ -542,6 +545,8 @@ class imbanditRedirector {
     //$r .= "</td>"; // other_controls_td
     //echo $r;
     //echo "</tr>";
+
+    // This is a new redirector.  No need for a delete button.
 
     // 3.2.6.2 save submit button
     $adminRow->other_save_div = "<input name='save_redirector' class='c_button_link' type='submit' value='Save' />";

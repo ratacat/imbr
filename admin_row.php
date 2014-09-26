@@ -131,9 +131,9 @@ class AdminRow {
       //$r .=   $this->other_url_div;
       //$r .= "</div>"; // other_url_div
 
-      //$r .= "<div class='other_delete_div'>";
-      //$r .=   $this->other_delete_div;
-      //$r .= "</div>"; // other_delete_div
+      $r .= "<div class='other_delete_div'>";
+      $r .=   $this->other_delete_div;
+      $r .= "</div>"; // other_delete_div
 
     }
 
