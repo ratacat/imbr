@@ -318,10 +318,8 @@ class imbanditRedirector {
 
     // 1.3 Delete a specific redirector
     } else if (isset($_POST['delete_redirector'])) {
-      //$query = "delete from self::$tableRedirectors where mn = '$_POST['delete_redirector']'";
-      //$redirector = $_POST['delete_redirector'];
-      //$query = "delete from self::$tableRedirectors where mn = '$redirector'";
-      //self::$wpdb->query($query);
+      $mn = $_POST['mn'];
+      $this->deleteRedirector($mn);
 
     // 1.4 Save the contents of a single existing or new redirector record
     } else if (isset($_POST['save_redirector'])) {
@@ -575,15 +573,7 @@ class imbanditRedirector {
     $spc            = $_POST['single_pages_categories'];
 
     // 2. Delete all traces of any imbr record that is associated with the given mn
-
-    // 2.1. Delete anything in imb_redirector associated with the given mn
-    self::$wpdb->query("delete from " . self::$tableRedirectors . " where mn='$mn'");
-
-    // 2.2. Delete anything in imb_regex associated with the given mn
-    self::$wpdb->query("delete from " . self::$tableRegexes . " where mn='$mn'");
-
-    // 2.3. Delete anything in imb_linkscanner associated with the given mn
-    self::$wpdb->query("delete from " . self::$tableLinkscanners . " where mn='$mn'");
+    $this->deleteRedirector($mn);
 
     // 3. Now insert the relevant records
     // 3.1. Insert into imb_redirector
@@ -615,6 +605,19 @@ class imbanditRedirector {
       }
     }
 
+  }
+
+  // Delete all traces of any imbr record that is associated with the given mn
+  private function deleteRedirector($mn) {
+
+    // 1. Delete anything in imb_redirector associated with the given mn
+    self::$wpdb->query("delete from " . self::$tableRedirectors . " where mn='$mn'");
+
+    // 2.2. Delete anything in imb_regex associated with the given mn
+    self::$wpdb->query("delete from " . self::$tableRegexes . " where mn='$mn'");
+
+    // 2.3. Delete anything in imb_linkscanner associated with the given mn
+    self::$wpdb->query("delete from " . self::$tableLinkscanners . " where mn='$mn'");
   }
 
   // This function will create the imbr tables in the db,
