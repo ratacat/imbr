@@ -46,7 +46,7 @@ require("admin_row.php");
 
 class imbanditRedirector {
 
-  public $imbV = '2.0.0';
+  public $imbV = '2.0.1';
 
   // The names of the db tables specifically for imbr
   private static $tableLinkscanners;
