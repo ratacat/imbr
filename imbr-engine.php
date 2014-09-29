@@ -488,9 +488,10 @@ class imbanditRedirector {
       //. "</label>";
       //. "</div>";      // homepage_div
 
-      $adminRow->mn_numbers_div = "<label>"
-        . "ID"
-        . "<input name='mn' type='text' value='$redirector->mn' size='3\'>"
+      $redirector_url = '"' . get_bloginfo( 'wpurl' ) . '?mn='. $redirector->mn . '"';
+      $prompt_message = '"Use this url:"';
+      $onClick = "prompt($prompt_message, $redirector_url)";
+      $adminRow->mn_numbers_div = "<input name='mn' class='c_button_link' type='button' value='MN=$redirector->mn' onclick='$onClick'/>"
         . "</label>";
 
       $adminRow->other_delete_div = "<input name='delete_redirector' class='c_button_link' type='submit' value='Delete' />"
