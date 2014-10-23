@@ -589,23 +589,25 @@ class imbanditRedirector {
     self::$wpdb->query($query);
 
     // 3.2. Insert into imb_regex
-    //$query = "INSERT INTO " . self::$tableRegexes . " (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$newRegex'";
     $query = "INSERT INTO " . self::$tableRegexes . " (regex, mn) VALUES ('$regex','$mn') on DUPLICATE KEY UPDATE regex ='$regex'";
     self::$wpdb->query($query);
 
     // 3.3. Now run linkscan on each element of spc
-    $spcs = explode(',', $spc);
-    foreach ($spcs as $spcItem) {
-      // only send $postid _or_ $spc, never both
-      if (is_numeric($spcItem))
-        //->linkscan($mn, $newRegex, $spcItem); // this is a postid
-        $this->linkscan($mn, $regex, $spcItem); // this is a postid
-      else {
-        //$this->linkscan($mn, $newRegex, NULL,$spcItem); // this is a spc
-        $this->linkscan($mn, $regex, NULL,$spcItem); // this is a spc
-      }
+    if ($spc == "") {
+      // 3.3.1 If the spc is blank, then examine all posts.
+      $this->linkscanAllPosts($mn, $regex);
+    } else {
+      // 3.3.1 If the spc is not blank, process as a comma-separated list of
+      //       tags and post-ids.
+      $spcs = explode(',', $spc);
+      foreach ($spcs as $spcItem) {
+        if (is_numeric($spcItem))
+          $this->linkscanPostID($mn, $regex, $spcItem); // this is a postid
+        else {
+          $this->linkscanTag($mn, $regex, $spcItem); // this is a tag
+        }
+	    }
     }
-
   }
 
   // Delete all traces of any imbr record that is associated with the given mn
@@ -795,59 +797,59 @@ class imbanditRedirector {
     return self::$wpdb->get_results($sql, ARRAY_A);
   }
 
-  // This method will find all the posts associated with $postid _or_ $spc,
+  // This method will invoke linkscan and order it to examine all posts.
+  private function linkscanAllPosts($mn, $regex) {
+    // If we pass "" as the $filter parameter then linkscan will not filter anything
+    // ie. it will find all posts.
+  	$this->linkscan($mn, $regex, "");
+  }
+
+  // This method will invoke linkscan and order it to examine a single post ID
+  private function linkscanPostID($mn, $regex, $postID) {
+    // This is how we specify a particular post ID
+    $this->linkscan($mn, $regex, " AND ID = '$postid'");
+  }
+
+  // This method will invoke linkscan and order it to examine all posts that are tagged
+  // with a given tag
+  private function linkscanTag($mn, $regex, $tag) {
+
+    // 1. Find all posts that are tagged with $tag.
+    // Note: This query appears to be performing a case-insensitive match on the name field.
+    // hence 'atlanta' will match 'Atlanta'.  Performing the same query using phpmyadmin
+    // causes a case-sensitive search and the aforementioned query would fail.  Beware!
+    $sql = "select object_id from wp_term_relationships left join "
+      . "wp_term_taxonomy on wp_term_relationships.term_taxonomy_id = wp_term_taxonomy.term_taxonomy_id left join "
+      . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$spc')";
+    $postIdFromTerms = self::$wpdb->get_results($sql);
+
+    // 2. Now build a comma-separated list of postIds of posts that are tagged with this tag.
+    //    Note: How big can this list get w/o sprouting trouble?
+    $postIds = '';
+    foreach ($postIdFromTerms as $postIdFromTerm) {
+      if(!$postIds){
+        $postIds = $postIdFromTerm->object_id;        // first item in the list
+      }else {
+        $postIds .=  ",".$postIdFromTerm->object_id;  // all subsequent items, prepended by comma
+      }
+    } // end for
+
+    // 3. Now invoke linkscan
+    $this->linkscan($mn, $regex, " AND ID in ('$postIds')");
+  }
+
+  // This method will find all the posts in the db matching $filter,
   // scan said posts for links that match $regex, and update the linkscanner db with
   // these links.
-  //
-  // $postid and $spc both come from category slugs + PostIDS aka spc, which can be a comma delimited list
-  // with both types mixed together.  The caller of linkscan is responsible for processing this list and
-  // for sending only one of them at a time to this method.
-  // This method will therefore only receive one $postid _or_ $spc at a time, but never both.
-  // How this method finds posts associated with $postid or $spc differs.
-  private function linkscan($mn, $regex = NULL, $postid = NULL,$spc = NULL) {
+  //private function linkscan($mn, $regex = NULL, $postid = NULL,$spc = NULL) {
+  private function linkscan($mn, $regex, $filter) {
 
-    // 1. How the relevant posts are found depends upon whether or not $postid or $spc is provided.
-    //    This is will build $postStr which is the single difference between the two possible
-    //    sql queries on the posts table, for subsequent execution.
-    if ($spc) {
-      // 1.1 If $spc is sent, then search for all posts tagged with this category
-      // and ignore $postid, even if present
-
-      // The information can be found using a 3 level join.  The old edition did not do this
-      // and instead used two queries and a lot of code.  Replace the old with a proper join query.
-      // This select appears to be performing a case-insensitive match on the name field.
-      // hence 'atlanta' will match 'Atlanta'.  Performing the same query using phpmyadmin
-      // causes a case-sensitive search and the aforementioned query would fail.  Beware!
-
-      $sql = "select object_id from wp_term_relationships left join "
-        . "wp_term_taxonomy on wp_term_relationships.term_taxonomy_id = wp_term_taxonomy.term_taxonomy_id left join "
-        . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$spc')";
-      $postIdFromTerms = self::$wpdb->get_results($sql);
-      $postIds = '';
-      foreach ($postIdFromTerms as $postIdFromTerm) {
-        if(!$postIds){
-          $postIds = $postIdFromTerm->object_id;
-        }else {
-          $postIds .=  ",".$postIdFromTerm->object_id;
-        }
-      }
-
-      $postStr = " AND ID in ('$postIds')";
-
-    } else {
-      // 1.2 If not $spc, then assume $postid is sent.  Assuming so, read only this one post and ignore $spc
-      $postStr = " AND ID = '$postid'";
-    }
-
-    // 2. Now retrieve the relevant posts
-    //$sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
-    //  . "AND post_type = 'post' $postStr ";
+    // 1. Now retrieve the relevant posts
     $sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
-      . "AND post_type = 'post' $postStr ";
-    //ORDER by id desc"; // who cares what order?
+      . "AND post_type = 'post' $filter ";
     $posts = self::$wpdb->get_results($sql, ARRAY_A);
 
-    // 3. Iterate over all the posts and examine them for matching links.  Deal with
+    // 2. Iterate over all the posts and examine them for matching links.  Deal with
     //    whatever matched links are found.
     $jsim_url_regex = get_option('jsim_url_regex'); // regex to recognize a url
     foreach ($posts as $post) {
