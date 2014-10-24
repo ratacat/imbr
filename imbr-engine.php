@@ -46,7 +46,7 @@ require("admin_row.php");
 
 class imbanditRedirector {
 
-  public $imbV = '2.0.1';
+  public $imbV = '2.0.2';
 
   // The names of the db tables specifically for imbr
   private static $tableLinkscanners;
@@ -835,7 +835,7 @@ class imbanditRedirector {
     } // end for
 
     // 3. Now invoke linkscan
-    $this->linkscan($mn, $regex, " AND ID in ('$postIds')");
+    $this->linkscan($mn, $regex, " AND ID in ($postIds)");
   }
 
   // This method will find all the posts in the db matching $filter,
@@ -845,8 +845,8 @@ class imbanditRedirector {
   private function linkscan($mn, $regex, $filter) {
 
     // 1. Now retrieve the relevant posts
-    $sql = "SELECT * FROM " . self::$tablePosts . " WHERE post_parent=0 AND post_status = 'publish' "
-      . "AND post_type = 'post' $filter ";
+    $sql = "SELECT ID, post_content, post_status, post_type FROM " . self::$tablePosts . " WHERE post_type not in ('attachment','revision') and post_status = 'publish' "
+      . " $filter ";
     $posts = self::$wpdb->get_results($sql, ARRAY_A);
 
     // 2. Iterate over all the posts and examine them for matching links.  Deal with
