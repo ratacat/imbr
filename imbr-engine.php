@@ -604,7 +604,7 @@ class imbanditRedirector {
         if (is_numeric($spcItem))
           $this->linkscanPostID($mn, $regex, $spcItem); // this is a postid
         else {
-          $this->linkscanTag($mn, $regex, $spcItem); // this is a tag
+          $this->linkscanTag($mn, $regex, $spcItem);    // this is a tag
         }
 	    }
     }

@@ -105,9 +105,14 @@ class AdminRow {
     if ($this->populated) {
       $r .= "<td class='linkscanner_td'>";
       $r .=   $this->linkscanner_td;
-      $r .= "</td>"; // linkscanner_td    	
+      $r .= "</td>"; // linkscanner_td
+
+      // Because this is an existing row, we already have the mn handy,
+      // so use that for the hidden mn input
+      $r .= "<input name='mn' type='hidden' value='" . $this->mn . "' />";
     } else {
-      // Otherwise insert this nameless table cell.
+      // Because this is the row for a new entry, we've already created
+      // the hidden mn input and passed it here via linkscanner_td. KLUDGE! Fix this.
       $r .= "<td>";
       $r .=   $this->linkscanner_td;
       $r .= "</td>"; // linkscanner_td
