@@ -807,7 +807,7 @@ class imbanditRedirector {
   // This method will invoke linkscan and order it to examine a single post ID
   private function linkscanPostID($mn, $regex, $postID) {
     // This is how we specify a particular post ID
-    $this->linkscan($mn, $regex, " AND ID = '$postid'");
+    $this->linkscan($mn, $regex, " AND ID = '$postID'");
   }
 
   // This method will invoke linkscan and order it to examine all posts that are tagged
@@ -820,7 +820,7 @@ class imbanditRedirector {
     // causes a case-sensitive search and the aforementioned query would fail.  Beware!
     $sql = "select object_id from wp_term_relationships left join "
       . "wp_term_taxonomy on wp_term_relationships.term_taxonomy_id = wp_term_taxonomy.term_taxonomy_id left join "
-      . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$spc')";
+      . "wp_terms on wp_term_taxonomy.term_id = wp_terms.term_id where name in ('$tag')";
     $postIdFromTerms = self::$wpdb->get_results($sql);
 
     // 2. Now build a comma-separated list of postIds of posts that are tagged with this tag.
