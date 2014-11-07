@@ -46,7 +46,7 @@ require("admin_row.php");
 
 class imbanditRedirector {
 
-  public $imbV = '2.0.2';
+  public $imbV = '2.0.3';
 
   // The names of the db tables specifically for imbr
   private static $tableLinkscanners;
@@ -123,7 +123,7 @@ class imbanditRedirector {
   // getting called.  The first step is to weed out calls that don't want redirection.
   //
   // There are two phases for a given redirection request and for each phase this function will be called.
-  // We use a POST parameter "redirectionPhase" (formerly "level") to communicate which phase of
+  // We use a POST parameter "redirectionPhase" to communicate which phase of
   // the process is happening.
   //
   // In phase 1, we determine which onsite post should receive the initial redirection and
@@ -174,51 +174,53 @@ class imbanditRedirector {
 
   // This function will implement phase 1 of the redirection, which is the
   // bulk of the work for the entire process.  In phase 1 we will determine everything
-  // necessary to complete the redirection, such as which post to initially bounce to and
+  // necessary to complete the redirection, such as which post to initially redirect to and
   // which off-site target to ultimately redirect to.  At the end of this method, we will
   // redirect to the appropriate post sending the minimal amount of info required
   // to redirect again to the final destination.
   //
   // Don't know what the return value does.
   private function doRedirection_Phase1($mn) {
-  
-  	// 1. Get the redirector record
-  	$sql = "select * from " . self::$tableRedirectors . " where mn='$mn'";
-  	$redirector = self::$wpdb->get_row($sql);
-  
-  	// 2. Find one random linkscanner link that matches this mn, if any.
-  	$sql = "SELECT * FROM " . self::$tableLinkscanners . " WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
-  	$linkscanner_row = self::$wpdb->get_row($sql);
-  
-  	// 3. Now determine the onsite redirection post and ultimate offsite target.
-  	if ($linkscanner_row) {
-  		// 3.1. Because this redirector has at least one associated linkscanner, treat
-  		// this redirection as route A.
-  		$ls_postid = $linkscanner_row->postid;
-  		$hopLink = get_permalink($ls_postid);
-  	} else if ($redirector->url != "") {
-  		// 3.2. Because this redirector has no linkscanner links, but does
-  		// have manual urls, treat this redirection as route B.
-  
-  		// 3.2.1. First find a random relevant post associated with the spc
-  		$relevantPosts = $this->findAllRelevantPosts($redirector->single_pages_categories);
-  		$randomPostIdx = array_rand($relevantPosts);
-  
-  		// 3.2.2. Next find a random manual target.  Assume the manual target
-  		// field may be a \n delimited list of urls.
-  		$manual_urls = explode( "\n" , $redirector->url);
-  		$manual_urlIdx = array_rand($manual_urls);
-  
-  		$hopLink = get_permalink($relevantPosts[$randomPostIdx]['ID']);
-  	}
-  
-  	// Now create a form and then submit it.  This causes a post to the onsite redirection page.
-  	echo "<html>";
-  	echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
-  	echo   "<body>";
-  	echo     "<form action='$hopLink' method='post' id='form1'>";
-  	echo        "<input type='hidden' name='offsiteURL' value='$manual_urls[$manual_urlIdx]' />";
-  	echo        "<input type='hidden' name='redirectionPhase' value='2' />";
+
+    // 1. Get the redirector record
+    $sql = "select * from " . self::$tableRedirectors . " where mn='$mn'";
+    $redirector = self::$wpdb->get_row($sql);
+
+    // 2. Find one random linkscanner link that matches this mn, if any.
+    $sql = "SELECT * FROM " . self::$tableLinkscanners . " WHERE mn = '$mn' ORDER BY RAND() LIMIT 1";
+    $linkscanner_row = self::$wpdb->get_row($sql);
+
+    // 3. Now determine the onsite redirection post and ultimate offsite target.
+    if ($linkscanner_row) {
+      // 3.1. Because this redirector has at least one associated linkscanner, treat
+      // this redirection as route A.
+      $ls_postid = $linkscanner_row->postid;
+      $hopLink = get_permalink($ls_postid);
+      $offsiteURL = $linkscanner_row->link;
+    } else if ($redirector->url != "") {
+      // 3.2. Because this redirector has no linkscanner links, but does
+      // have manual urls, treat this redirection as route B.
+
+      // 3.2.1. First find a random relevant post associated with the spc
+      //$relevantPosts = $this->findAllRelevantPosts($redirector->single_pages_categories);
+      //$randomPostIdx = array_rand($relevantPosts);
+
+      // 3.2.2. Next find a random manual target.  Assume the manual target
+      // field may be a \n delimited list of urls.
+      //$manual_urls = explode( "\n" , $redirector->url);
+      //$manual_urlIdx = array_rand($manual_urls);
+
+      //$hopLink = get_permalink($relevantPosts[$randomPostIdx]['ID']);
+    }
+
+    // Now create a form and then submit it.  This causes a post to the onsite redirection page.
+    echo "<html>";
+    echo   "<head><META NAME='ROBOTS' CONTENT='NOINDEX, NOFOLLOW'></head>";
+    echo   "<body>";
+    echo     "<form action='$hopLink' method='post' id='form1'>";
+    //echo        "<input type='hidden' name='offsiteURL' value='$manual_urls[$manual_urlIdx]' />";
+    echo        "<input type='hidden' name='offsiteURL' value='$offsiteURL' />";
+    echo        "<input type='hidden' name='redirectionPhase' value='2' />";
     echo      "</form>";
     echo     "<script language='JavaScript'>document.getElementById('form1').submit();</script>";
     echo   "</body>";
